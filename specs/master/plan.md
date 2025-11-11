@@ -15,16 +15,19 @@ Build a lightweight Python backend service that continuously collects Solana (SO
 **Primary Dependencies**:
 - `solana` (v0.35.0): Blockchain interaction
 - `solders` (v0.21.0): Solana SDK types
-- `openai` or `anthropic`: LLM API client (NEEDS CLARIFICATION: which provider?)
+- `anthropic`: Claude LLM API client (selected after research)
+- `langchain` (v0.3.12): Agent framework and tool abstraction
+- `langchain-anthropic`: LangChain integration for Claude
 - `aiohttp`: Async HTTP for API calls
 - `python-dotenv`: Environment config
-- `pydantic`: Data validation
+- `pydantic` (v2.10+): Data validation
 - `requests`: Price API calls (CoinGecko/Jupiter)
 
 **Storage**: SQLite (trading history, signals) + JSON files (config backup)
 **Testing**: pytest with pytest-asyncio (async test support)
 **Target Platform**: Linux/Windows server (Docker deployable)
 **Project Type**: Single backend service (no frontend/API endpoints initially)
+**Agent Framework**: LangChain for tool orchestration and LLM interaction patterns
 **Performance Goals**:
 - Data fetch: <5s per cycle (60s intervals)
 - LLM analysis: <10s response time
@@ -83,6 +86,7 @@ src/
 │   ├── __init__.py
 │   ├── main.py             # Entry point, orchestrates data→LLM→trade loop
 │   ├── config.py           # Configuration loader (env vars, defaults)
+│   ├── agent.py            # SolanaAgentKit wrapper (simplified from agentipy)
 │   ├── models/             # Data models (Pydantic schemas)
 │   │   ├── __init__.py
 │   │   ├── market_data.py  # MarketData schema
@@ -91,9 +95,14 @@ src/
 │   ├── services/           # Business logic services
 │   │   ├── __init__.py
 │   │   ├── data_collector.py   # Fetch prices from CoinGecko/Jupiter
-│   │   ├── llm_analyzer.py     # Send data to LLM, parse response
+│   │   ├── llm_analyzer.py     # LangChain agent with Claude
 │   │   ├── trade_executor.py   # Execute trades on Solana (Jupiter swap)
 │   │   └── storage.py          # SQLite persistence for history
+│   ├── langchain_tools/    # LangChain tool definitions (agentipy pattern)
+│   │   ├── __init__.py
+│   │   ├── fetch_price.py      # SolanaFetchPriceTool (BaseTool)
+│   │   ├── execute_trade.py    # SolanaTradeTool (BaseTool)
+│   │   └── get_market_data.py  # SolanaMarketDataTool (BaseTool)
 │   └── utils/              # Utilities
 │       ├── __init__.py
 │       ├── logger.py       # Structured JSON logging setup
@@ -104,12 +113,15 @@ tests/
 │   ├── test_models.py
 │   ├── test_data_collector.py
 │   ├── test_llm_analyzer.py
+│   ├── test_langchain_tools.py
 │   └── test_storage.py
 ├── integration/            # Integration tests (mocked APIs)
 │   ├── test_data_to_llm.py
-│   └── test_llm_to_trade.py
+│   ├── test_llm_to_trade.py
+│   └── test_agent_with_tools.py
 ├── contract/               # Contract tests (API/LLM response formats)
-│   └── test_llm_signal_contract.py
+│   ├── test_llm_signal_contract.py
+│   └── test_tool_schemas.py
 └── performance/            # Performance tests (latency validation)
     └── test_data_fetch_latency.py
 
@@ -118,7 +130,13 @@ pyproject.toml              # Poetry dependencies (Python 3.11+)
 README.md                   # Project overview
 ```
 
-**Structure Decision**: Single project structure selected. Backend-only service with no frontend/API. Clean separation: models (data schemas), services (business logic), utils (cross-cutting concerns). Tests organized by type (unit/integration/contract/performance) per constitution requirements.
+**Structure Decision**: Single project structure selected. Backend-only service with no frontend/API. Clean separation: models (data schemas), services (business logic), langchain_tools (agent tools following agentipy BaseTool pattern), utils (cross-cutting concerns). Tests organized by type (unit/integration/contract/performance) per constitution requirements.
+
+**LangChain Integration Pattern** (from agentipy):
+- All Solana operations exposed as LangChain `BaseTool` subclasses
+- Tools receive `SolanaAgentKit` instance for blockchain interaction
+- Agent orchestrates tool calls via LangChain's agent framework
+- Enables LLM to decide when to fetch prices, analyze data, or execute trades
 
 ## Complexity Tracking
 
@@ -143,10 +161,11 @@ README.md                   # Project overview
 
 ## Phase 1: Design Summary
 
-**Status**: ✅ Completed | **Outputs**:
+**Status**: ✅ Completed (Updated with LangChain) | **Outputs**:
 - `data-model.md` - 4 Pydantic entities with SQLite schema
 - `contracts/llm-signals.schema.json` - LLM response contract
 - `quickstart.md` - 15-minute deployment guide
+- `research.md` - Updated with LangChain agent framework decision
 
 **Entities Defined**:
 1. `MarketData` - Price and indicators from APIs
@@ -155,6 +174,12 @@ README.md                   # Project overview
 4. `BotConfiguration` - Environment-based settings
 
 **API Contract**: Strict JSON schema for LLM signals (BUY/SELL/HOLD + market_conditions)
+
+**LangChain Integration**:
+- Agent framework for tool orchestration (following agentipy pattern)
+- All Solana operations wrapped as `BaseTool` subclasses
+- Tools: `SolanaFetchPriceTool`, `SolanaTradeTool`, `SolanaMarketDataTool`
+- Claude LLM dynamically selects and executes tools via `AgentExecutor`
 
 ---
 

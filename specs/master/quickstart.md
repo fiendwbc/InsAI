@@ -33,6 +33,8 @@ poetry shell
 
 **Dependencies installed**:
 - `anthropic` - LLM API client
+- `langchain` (v0.3.12) - Agent framework for tool orchestration
+- `langchain-anthropic` - LangChain integration with Claude
 - `solana` - Blockchain interaction
 - `solders` - Solana SDK types
 - `aiohttp` - Async HTTP requests

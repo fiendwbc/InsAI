@@ -326,6 +326,8 @@ class TradeExecutor:
 | Component | Technology | Version | Rationale |
 |-----------|-----------|---------|-----------|
 | **LLM** | Anthropic Claude | 3.5 Sonnet | Best structured output, 2x cheaper, better reasoning |
+| **Agent Framework** | LangChain | 0.3.12 | Tool orchestration, proven Solana integration (agentipy) |
+| **LLM Integration** | langchain-anthropic | Latest | Official LangChain Claude integration |
 | **Price Data (Primary)** | Jupiter Quote API | v6 | Real-time swap rates, unlimited free tier |
 | **Price Data (Backup)** | CoinGecko API | v3 | Free tier, market validation |
 | **Trade Execution** | Jupiter Swap API | v6 | Direct REST API, production-stable |
@@ -335,6 +337,123 @@ class TradeExecutor:
 | **Logging** | structlog | Latest | Structured JSON logging |
 | **Storage** | SQLite | 3.x | Lightweight, no server needed |
 | **Config** | python-dotenv | Latest | .env file for secrets |
+
+---
+
+## 6. LangChain Agent Framework Integration
+
+**Question**: Should we use LangChain for agent/tool orchestration, or implement direct LLM API calls?
+
+**Research Findings from agentipy**:
+- Agentipy extensively uses LangChain's `BaseTool` pattern
+- All Solana operations (balance, trade, fetch price, etc.) wrapped as LangChain tools
+- Tools receive `SolanaAgentKit` instance via dependency injection
+- Agent can dynamically select which tools to use based on LLM decision
+
+**Benefits of LangChain**:
+1. **Tool Abstraction**: Standard interface for all operations (name, description, input schema)
+2. **Agent Orchestration**: LLM can chain tools (e.g., fetch price → analyze → trade)
+3. **Proven Pattern**: agentipy demonstrates this works well for Solana trading
+4. **Extensibility**: Easy to add new tools (e.g., sentiment analysis, technical indicators)
+5. **Debugging**: Built-in callbacks and logging for tool execution
+
+**Decision**: **Use LangChain for tool orchestration**
+
+**Rationale**:
+1. **Reference Implementation**: agentipy proves this pattern works for Solana trading bots
+2. **Modularity**: Each operation (fetch price, execute trade) is a self-contained tool
+3. **LLM Flexibility**: Claude can decide tool call sequence dynamically
+4. **Maintainability**: Adding new data sources or trading strategies = add new tool
+5. **Testing**: Mock individual tools easily for unit tests
+
+**Implementation Pattern** (from agentipy):
+```python
+# langchain_tools/fetch_price.py
+from langchain.tools import BaseTool
+from pydantic import BaseModel, Field
+import json
+
+class FetchPriceInput(BaseModel):
+    """Input schema for price fetch tool."""
+    token_id: str = Field(description="Token mint address or symbol")
+
+class SolanaFetchPriceTool(BaseTool):
+    """Fetch current SOL/USDT price from Jupiter or CoinGecko."""
+
+    name: str = "fetch_solana_price"
+    description: str = """
+    Fetch the current price of SOL in USDT.
+    Returns: Current price, volume, 24h change percentage.
+    Use this when you need up-to-date market data.
+    """
+    args_schema: Type[BaseModel] = FetchPriceInput
+    solana_kit: SolanaAgentKit  # Injected dependency
+
+    async def _arun(self, token_id: str) -> str:
+        """Async execution (required by LangChain)."""
+        try:
+            price = await self.solana_kit.fetch_price(token_id)
+            return json.dumps({
+                "status": "success",
+                "token": token_id,
+                "price_usd": price,
+                "timestamp": datetime.now(UTC).isoformat()
+            })
+        except Exception as e:
+            return json.dumps({
+                "status": "error",
+                "message": str(e)
+            })
+
+    def _run(self, token_id: str) -> str:
+        """Sync fallback (required by BaseTool interface)."""
+        raise NotImplementedError("Use async version (_arun)")
+
+# main.py - Agent setup
+from langchain.agents import AgentExecutor, create_structured_chat_agent
+from langchain_anthropic import ChatAnthropic
+
+# Initialize Claude LLM
+llm = ChatAnthropic(
+    model="claude-3-5-sonnet-20241022",
+    api_key=config.anthropic_api_key,
+    max_tokens=1024,
+    temperature=0.7
+)
+
+# Initialize Solana agent kit
+solana_kit = SolanaAgentKit(
+    private_key=config.wallet_private_key,
+    rpc_url=config.solana_rpc_url
+)
+
+# Create tools
+tools = [
+    SolanaFetchPriceTool(solana_kit=solana_kit),
+    SolanaTradeTool(solana_kit=solana_kit),
+    SolanaMarketDataTool(solana_kit=solana_kit)
+]
+
+# Create agent
+agent = create_structured_chat_agent(llm, tools, prompt_template)
+agent_executor = AgentExecutor(
+    agent=agent,
+    tools=tools,
+    verbose=True,
+    handle_parsing_errors=True
+)
+
+# Run agent
+result = await agent_executor.ainvoke({
+    "input": "Analyze current SOL market conditions and recommend trading action"
+})
+```
+
+**Advantages Over Direct API Calls**:
+- LLM can decide tool execution order dynamically
+- Easy to add new data sources (just add new tool)
+- Built-in error handling and retry in agent executor
+- Observability via LangChain callbacks
 
 ---
 
@@ -354,6 +473,9 @@ class TradeExecutor:
 
 ### 5. PostgreSQL/MongoDB for Storage
 **Rejected because**: Overkill for single-instance bot. SQLite is sufficient for trade history (~1440 records/day).
+
+### 6. Direct LLM API Calls (without LangChain)
+**Rejected because**: Loses tool orchestration benefits. Would need to manually implement tool routing, error handling, and observability. LangChain provides this out-of-box and agentipy proves it works.
 
 ---
 
