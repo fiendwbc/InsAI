@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Trading Signal Schema",
+  "description": "JSON schema for LLM-generated trading signals. This contract ensures LLM responses are strictly validated before execution.",
+  "type": "object",
+  "required": ["signal", "confidence", "rationale", "market_conditions"],
+  "properties": {
+    "signal": {
+      "type": "string",
+      "enum": ["BUY", "SELL", "HOLD"],
+      "description": "Trading action recommendation. MUST be one of the three allowed values."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "LLM confidence score between 0 (no confidence) and 1 (complete confidence)."
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 1000,
+      "description": "Clear explanation for the trading decision. Must be at least 10 characters and provide specific reasoning."
+    },
+    "suggested_amount_sol": {
+      "type": "number",
+      "minimum": 0.001,
+      "maximum": 10.0,
+      "description": "Optional: Suggested trade size in SOL. If not provided, system uses default from config."
+    },
+    "market_conditions": {
+      "type": "object",
+      "description": "Key market factors that influenced the decision.",
+      "properties": {
+        "trend": {
+          "type": "string",
+          "enum": ["bullish", "bearish", "neutral", "unknown"],
+          "description": "Current market trend assessment."
+        },
+        "volume_assessment": {
+          "type": "string",
+          "enum": ["high", "medium", "low", "unknown"],
+          "description": "24h volume assessment relative to historical average."
+        },
+        "volatility": {
+          "type": "string",
+          "enum": ["high", "medium", "low", "unknown"],
+          "description": "Recent price volatility assessment."
+        },
+        "risk_level": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "Assessed risk level for this trading signal."
+        }
+      },
+      "required": ["trend", "volume_assessment", "volatility", "risk_level"],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "signal": "BUY",
+      "confidence": 0.78,
+      "rationale": "SOL price showing strong upward momentum (+3.2% in 24h) with above-average volume. Technical indicators suggest continued bullish trend. Good entry point for long position.",
+      "suggested_amount_sol": 0.05,
+      "market_conditions": {
+        "trend": "bullish",
+        "volume_assessment": "high",
+        "volatility": "medium",
+        "risk_level": "medium"
+      }
+    },
+    {
+      "signal": "SELL",
+      "confidence": 0.65,
+      "rationale": "SOL price declining (-5% in past 2 hours) with increasing selling pressure. Volume suggests potential further downside. Recommend taking profits or cutting losses.",
+      "suggested_amount_sol": 0.1,
+      "market_conditions": {
+        "trend": "bearish",
+        "volume_assessment": "high",
+        "volatility": "high",
+        "risk_level": "high"
+      }
+    },
+    {
+      "signal": "HOLD",
+      "confidence": 0.55,
+      "rationale": "SOL price consolidating with low volatility. No clear directional signals. Insufficient data to make confident trading decision. Recommend waiting for clearer market signals.",
+      "market_conditions": {
+        "trend": "neutral",
+        "volume_assessment": "low",
+        "volatility": "low",
+        "risk_level": "low"
+      }
+    }
+  ],
+  "errorMessage": {
+    "required": {
+      "signal": "Trading signal (BUY/SELL/HOLD) is required",
+      "confidence": "Confidence score (0-1) is required",
+      "rationale": "Rationale explaining the decision is required",
+      "market_conditions": "Market conditions assessment is required"
+    },
+    "properties": {
+      "signal": "Signal must be exactly one of: BUY, SELL, HOLD",
+      "confidence": "Confidence must be a number between 0.0 and 1.0",
+      "rationale": "Rationale must be between 10 and 1000 characters",
+      "suggested_amount_sol": "Suggested amount must be between 0.001 and 10.0 SOL"
+    }
+  }
+}

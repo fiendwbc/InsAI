@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -ExecutionPolicy Bypass -File .specify/scripts/powershell/setup-plan.ps1 -Json -Arguments \"从零开始创建一个后端项目,通过不断的获取solana的价格数据和其他网站提供的技术指标，输入给LLM，判断在何时交易solana/usdt，交易的实现依赖solana提供的接口。 请分析agentipy/ 文件夹中的项目作为参考，但是功能更简洁，以便快速验证功能\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File .specify/scripts/powershell/setup-plan.ps1 -Json)",
+      "mcp__context7__resolve-library-id",
+      "WebSearch",
+      "mcp__context7__get-library-docs",
+      "WebFetch(domain:docs.chainstack.com)",
+      "WebFetch(domain:www.elastic.co)",
+      "WebFetch(domain:www.quicknode.com)",
+      "WebFetch(domain:roguelynn.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:intuitionlabs.ai)",
+      "Bash(powershell -ExecutionPolicy Bypass -File .specify/scripts/powershell/update-agent-context.ps1:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
