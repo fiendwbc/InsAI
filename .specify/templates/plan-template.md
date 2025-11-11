@@ -31,7 +31,18 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Review against constitution principles (`.specify/memory/constitution.md`):
+
+- [ ] **Code Quality First**: Feature design supports <50 line functions, clear naming, comprehensive docstrings?
+- [ ] **Testing Standards**: TDD approach planned (tests before implementation)? All test types identified (contract, integration, unit, performance)?
+- [ ] **UX Consistency**: Error messages actionable? Loading states <100ms? API follows REST conventions?
+- [ ] **Performance Requirements**: Performance budgets defined (API latency, UI rendering, real-time data)? Monitoring planned?
+- [ ] **Observability**: Structured logging planned? Metrics identified? Distributed tracing for critical flows?
+- [ ] **Security & Risk**: Input validation planned? Secrets management addressed? Rate limits for trading operations?
+
+**Violations requiring justification** (fill Complexity Tracking table if any):
+- None expected for standard features
+- Document any principle violations with rationale
 
 ## Project Structure
 

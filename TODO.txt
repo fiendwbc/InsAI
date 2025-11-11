@@ -1,0 +1,2 @@
+1.舆情分析系统参考https://github.com/666ghj/BettaFish
+2.交易界面以及其他模块参考https://github.com/ValueCell-ai/valuecell
