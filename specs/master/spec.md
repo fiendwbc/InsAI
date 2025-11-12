@@ -7,13 +7,53 @@
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Automated Market Data Collection (Priority: P1) 🎯 MVP
+**📋 PRIORITY NOTE**: Implementation order revised for faster mainnet validation - Core Trading (US3) → LLM Control (US2) → Market Data (US1). See tasks.md for detailed rationale.
+
+---
+
+### User Story 3 - Solana Trade Execution (Priority: P1) 🎯 MVP Phase 1
+
+The system executes SOL/USDT trades on Solana blockchain via Jupiter aggregator, with both manual and LLM-controlled modes.
+
+**Why this priority (UPDATED)**: Fastest path to validate core trading capability on real mainnet. Enables immediate testing of Jupiter integration, wallet management, and transaction execution without waiting for automated data collection. Can trade based on external market analysis initially, then add automation later.
+
+**Independent Test**: Can be tested with minimal trade amounts on Solana mainnet. Verify transaction creation, signing, and on-chain confirmation. Start with dry-run mode for safety, then execute small real trades (0.01 SOL).
+
+**Acceptance Scenarios**:
+
+1. **Given** manual trade command is issued, **When** execution is triggered, **Then** SOL/USDT swap transaction is created and sent to Solana
+2. **Given** trade is executed, **When** transaction completes, **Then** transaction signature, status, and final balances are logged
+3. **Given** dry-run mode is enabled, **When** trade is attempted, **Then** quote is fetched but transaction is NOT sent to blockchain
+4. **Given** insufficient balance exists, **When** trade is attempted, **Then** trade is rejected and balance warning is logged
+5. **Given** trade fails, **When** error occurs, **Then** transaction is not retried, error is logged with details
+
+---
+
+### User Story 2 - LLM-Based Trading Control (Priority: P2) 🎯 MVP Phase 2
+
+The system enables LLM to control real Solana trades via LangChain tools, with safety guardrails and dry-run testing.
+
+**Why this priority (UPDATED)**: After core trading is validated (US3-P1), add LLM control layer. This allows LLM to execute trades based on natural language instructions while maintaining safety through dry-run defaults and confirmation workflows. More valuable than automated data collection for rapid experimentation.
+
+**Independent Test**: Can be tested by sending prompts to LLM agent and verifying tool execution (wallet balance checks, dry-run trades, real trades with confirmation). No automated data pipeline required - LLM can trade based on external market information.
+
+**Acceptance Scenarios**:
+
+1. **Given** user sends prompt to LLM, **When** prompt requests balance check, **Then** LLM calls get_wallet_balance tool and returns SOL/USDT amounts
+2. **Given** user requests trade, **When** LLM processes request, **Then** LLM performs dry-run first and asks for confirmation before real execution
+3. **Given** LLM returns trading signal, **When** decision is logged, **Then** includes rationale, confidence score, and timestamp
+4. **Given** LLM attempts unsafe trade (>0.1 SOL), **When** validation occurs, **Then** LLM warns user and suggests safer amount
+5. **Given** LLM API fails, **When** error occurs, **Then** system logs error and does not execute any trades
+
+---
+
+### User Story 1 - Automated Market Data Collection (Priority: P3)
 
 The system continuously fetches Solana (SOL) price data and technical indicators from external sources, storing them for analysis.
 
-**Why this priority**: Core data pipeline is fundamental - without reliable market data collection, no trading decisions can be made. This is the foundation for all subsequent functionality.
+**Why this priority (UPDATED - DEFERRED)**: While data collection is valuable for fully automated trading, it's not required for MVP validation. Core trading (US3-P1) and LLM control (US2-P2) can operate with manual market analysis or external data sources. Automated data collection can be added once core trading is proven on mainnet.
 
-**Independent Test**: Can be fully tested by verifying data collection from price APIs (e.g., CoinGecko, Jupiter) and confirming data is correctly formatted and logged. Delivers immediate value by providing market visibility.
+**Independent Test**: Can be fully tested by verifying data collection from price APIs (e.g., CoinGecko, Jupiter) and confirming data is correctly formatted and logged. Delivers value by enabling automated trading decisions.
 
 **Acceptance Scenarios**:
 
@@ -21,40 +61,6 @@ The system continuously fetches Solana (SOL) price data and technical indicators
 2. **Given** price data is requested, **When** external API is called, **Then** response includes price, timestamp, and is validated
 3. **Given** API call fails, **When** error occurs, **Then** system logs error, waits, and retries up to 3 times
 4. **Given** multiple data sources exist, **When** collecting data, **Then** data from all sources is aggregated with source attribution
-
----
-
-### User Story 2 - LLM-Based Trading Decision Engine (Priority: P2)
-
-The system analyzes collected market data using an LLM to generate trading signals (BUY/SELL/HOLD).
-
-**Why this priority**: Decision-making logic is the intelligence layer. Must come after data collection (P1) but before actual trading (P3) to enable safe testing without financial risk.
-
-**Independent Test**: Can be tested by feeding mock market data to LLM and verifying it returns valid trading signals with rationale. No actual trading required.
-
-**Acceptance Scenarios**:
-
-1. **Given** market data is available, **When** analysis interval triggers, **Then** LLM receives formatted data and returns trading signal
-2. **Given** LLM returns BUY signal, **When** decision is logged, **Then** includes rationale, confidence score, and timestamp
-3. **Given** insufficient data exists, **When** LLM is queried, **Then** returns HOLD signal with "insufficient data" rationale
-4. **Given** LLM API fails, **When** error occurs, **Then** system defaults to HOLD and logs error
-
----
-
-### User Story 3 - Solana Trade Execution (Priority: P3)
-
-The system executes SOL/USDT trades on Solana blockchain based on LLM trading signals.
-
-**Why this priority**: Trade execution is the final step - requires both data collection (P1) and decision logic (P2) to be functional. Highest risk, so implemented last after thorough testing of prerequisites.
-
-**Independent Test**: Can be tested with minimal trade amounts on Solana devnet/testnet. Verify transaction creation, signing, and on-chain confirmation.
-
-**Acceptance Scenarios**:
-
-1. **Given** LLM signal is BUY with high confidence, **When** execution is triggered, **Then** SOL/USDT swap transaction is created and sent to Solana
-2. **Given** trade is executed, **When** transaction completes, **Then** transaction signature, status, and final balances are logged
-3. **Given** trade fails, **When** error occurs, **Then** transaction is not retried, error is logged with details
-4. **Given** insufficient balance exists, **When** trade is attempted, **Then** trade is rejected and balance warning is logged
 
 ---
 

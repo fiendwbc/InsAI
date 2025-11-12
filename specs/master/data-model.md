@@ -117,15 +117,34 @@ LLM decision output indicating trading action and reasoning.
 | `confidence` | `float` | Yes | LLM confidence score | Range: 0.0 to 1.0 |
 | `rationale` | `str` | Yes | Explanation for the decision | Min length: 10 chars |
 | `suggested_amount_sol` | `float` | No | Suggested trade size (SOL) | Must be > 0 if present |
-| `market_conditions` | `Dict[str, Any]` | No | Key market factors in decision | JSON-serializable dict |
+| `market_conditions` | `MarketConditions` | Yes | Key market factors in decision | Must include: trend, volume_assessment, volatility, risk_level |
 | `llm_model` | `str` | Yes | LLM model used | e.g., "claude-3-5-sonnet-20241022" |
 | `analysis_duration_sec` | `float` | No | Time taken for LLM analysis | Must be >= 0 |
 
 **Pydantic Implementation**:
 ```python
 from datetime import datetime
-from typing import Optional, Dict, Any, Literal
+from typing import Optional, Literal
 from pydantic import BaseModel, Field, field_validator
+
+class MarketConditions(BaseModel):
+    """Market conditions assessment (matches llm-signals.schema.json contract)."""
+
+    trend: Literal["bullish", "bearish", "neutral", "unknown"] = Field(
+        description="Current market trend assessment"
+    )
+    volume_assessment: Literal["high", "medium", "low", "unknown"] = Field(
+        description="24h volume assessment relative to historical average"
+    )
+    volatility: Literal["high", "medium", "low", "unknown"] = Field(
+        description="Recent price volatility assessment"
+    )
+    risk_level: Literal["high", "medium", "low"] = Field(
+        description="Assessed risk level for this trading signal"
+    )
+
+    class Config:
+        extra = "forbid"  # Matches JSON schema additionalProperties: false
 
 class TradingSignal(BaseModel):
     """LLM-generated trading signal with reasoning."""
@@ -150,9 +169,8 @@ class TradingSignal(BaseModel):
         gt=0,
         description="Recommended trade size in SOL"
     )
-    market_conditions: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Key market factors influencing decision"
+    market_conditions: MarketConditions = Field(
+        description="Key market factors influencing decision (REQUIRED)"
     )
     llm_model: str = Field(
         description="LLM model identifier"
@@ -180,8 +198,9 @@ class TradingSignal(BaseModel):
                 "suggested_amount_sol": 0.05,
                 "market_conditions": {
                     "trend": "bullish",
-                    "volume_rank": "high",
-                    "volatility": "medium"
+                    "volume_assessment": "high",
+                    "volatility": "medium",
+                    "risk_level": "medium"
                 },
                 "llm_model": "claude-3-5-sonnet-20241022",
                 "analysis_duration_sec": 2.3

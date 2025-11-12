@@ -370,19 +370,21 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install Poetry
-RUN pip install poetry
+# Install uv (fast Python package manager)
+RUN pip install uv
 
 # Copy dependency files
-COPY pyproject.toml poetry.lock ./
-RUN poetry config virtualenvs.create false && poetry install --no-dev
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies using uv (no virtual environment in container)
+RUN uv sync --no-dev
 
 # Copy application
 COPY src/ ./src/
 COPY .env .env
 
 # Run bot
-CMD ["python", "-m", "solana_trader.main"]
+CMD ["uv", "run", "python", "-m", "solana_trader.main"]
 ```
 
 ### Run Container

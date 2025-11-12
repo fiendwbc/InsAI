@@ -8,7 +8,7 @@ This document resolves all "NEEDS CLARIFICATION" items from the Technical Contex
 
 ## Research Areas
 
-### 1. LLM Provider Selection: OpenAI vs Anthropic Claude
+### 1. LLM Provider Selection: Multi-LLM Strategy via OpenRouter
 
 **Question**: Which LLM provider is better for trading decision analysis with structured JSON output?
 
@@ -25,28 +25,51 @@ This document resolves all "NEEDS CLARIFICATION" items from the Technical Contex
   - More established ecosystem
   - Higher cost for high-frequency use (1440 calls/day = ~2M tokens/day input)
 
-**Decision**: **Use Anthropic Claude 3.5 Sonnet**
+- **OpenRouter** (Multi-LLM Gateway):
+  - Unified API for 100+ models (Claude, GPT-4, DeepSeek, Gemini)
+  - OpenAI-compatible SDK (drop-in replacement)
+  - Automatic failover if primary provider is down
+  - Dynamic model switching via config (no code changes)
+  - Cost optimization (switch to cheaper models for simple tasks)
+  - +50-100ms latency overhead (acceptable for 60s trading intervals)
+
+**Decision**: **Use Claude 3.5 Sonnet via OpenRouter as primary, GPT-4 as fallback**
 
 **Rationale**:
-1. **Cost**: At 60s intervals (1440 decisions/day), input cost is critical. Claude saves ~$6-9/day on input tokens
-2. **Structured output**: Trading signals require strict JSON format (BUY/SELL/HOLD + rationale). Claude excels at this
-3. **Reasoning quality**: Financial decisions need step-by-step logic - Claude's methodical approach is safer
-4. **API stability**: Claude API is production-ready, well-documented
+1. **Cost**: Claude saves ~$6-9/day on input tokens, OpenRouter adds negligible overhead
+2. **Structured output**: Claude excels at JSON format, OpenRouter preserves this capability
+3. **Reasoning quality**: Claude's methodical approach is safer for financial decisions
+4. **Resilience**: OpenRouter provides automatic failover to GPT-4 if Claude is down
+5. **Flexibility**: Can switch models via config without code changes
+6. **Future-proof**: Easy to add DeepSeek, Gemini, or other providers later
 
 **Implementation**:
 ```python
-# Use anthropic Python SDK
-from anthropic import AsyncAnthropic
-client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+# Use OpenRouter with OpenAI-compatible SDK
+from openai import AsyncOpenAI
 
-# JSON mode for structured output
-response = await client.messages.create(
-    model="claude-3-5-sonnet-20241022",
-    max_tokens=1024,
+client = AsyncOpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("OPENROUTER_API_KEY")
+)
+
+# Model mapping for easy switching
+models = {
+    "claude": "anthropic/claude-3.5-sonnet",
+    "gpt4": "openai/gpt-4-turbo-preview",
+    "deepseek": "deepseek/deepseek-chat",
+    "gemini": "google/gemini-pro-1.5"
+}
+
+# Use primary model with fallback
+response = await client.chat.completions.create(
+    model=models["claude"],  # Primary: Claude via OpenRouter
     messages=[{"role": "user", "content": prompt}],
     response_format={"type": "json_object"}  # Ensure JSON
 )
 ```
+
+**Tradeoff**: +50-100ms latency acceptable for 60s intervals (adds <0.2% to cycle time)
 
 ---
 
