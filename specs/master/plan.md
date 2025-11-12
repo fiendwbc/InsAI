@@ -134,7 +134,8 @@ tests/
     └── test_data_fetch_latency.py
 
 .env.example                # Environment variable template
-pyproject.toml              # Poetry dependencies (Python 3.11+)
+pyproject.toml              # uv dependencies (PEP 621 standard, Python 3.11+)
+uv.lock                     # uv lockfile (exact dependency versions)
 README.md                   # Project overview
 ```
 

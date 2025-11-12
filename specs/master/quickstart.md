@@ -15,7 +15,7 @@ This guide walks you through setting up and running the Solana AI trading bot in
 Before starting, ensure you have:
 
 - **Python 3.11+** installed (`python --version`)
-- **Poetry** package manager (`pip install poetry`)
+- **uv** package manager (install: `pip install uv` or via installer from https://docs.astral.sh/uv/)
 - **OpenRouter API key** (sign up at https://openrouter.ai - provides access to Claude, GPT-4, DeepSeek, Gemini)
 - **CoinKarma credentials** (authentication token + device ID from CoinKarma dashboard)
 - **Solana wallet** with private key (create with `solana-keygen new`)
@@ -29,11 +29,14 @@ Before starting, ensure you have:
 # Clone repository
 cd F:\Project\AITrader\InsAI
 
-# Install dependencies with Poetry
-poetry install
+# Install dependencies with uv (creates .venv automatically)
+uv sync
 
 # Activate virtual environment
-poetry shell
+# Windows:
+.venv\Scripts\activate
+# Linux/Mac:
+source .venv/bin/activate
 ```
 
 **Dependencies installed**:
@@ -112,8 +115,11 @@ DATABASE_PATH=trading_bot.db
 Test your setup without starting the bot:
 
 ```bash
-# Run configuration test
-poetry run python -m solana_trader.config
+# Run configuration test (with activated venv)
+python -m solana_trader.config
+
+# Or using uv directly:
+uv run python -m solana_trader.config
 
 # Expected output:
 # ✓ OpenRouter API key: Valid (sk-or-v1-...)
@@ -138,11 +144,11 @@ poetry run python -m solana_trader.config
 Start in dry-run mode (simulates trades without blockchain execution):
 
 ```bash
-# Start the trading bot
-poetry run python -m solana_trader.main
-
-# Alternative: Direct Python
+# Start the trading bot (with activated venv)
 python -m solana_trader.main
+
+# Or using uv directly (automatically uses project venv):
+uv run python -m solana_trader.main
 ```
 
 **Expected Console Output**:
@@ -235,7 +241,7 @@ MAX_TRADES_PER_DAY=5      # Limit exposure
 
 Restart bot:
 ```bash
-poetry run python -m solana_trader.main
+uv run python -m solana_trader.main
 ```
 
 **Expected Output** (real trading):
