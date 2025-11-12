@@ -19,11 +19,14 @@ Represents collected price and technical indicator data from external sources.
 | Field | Type | Required | Description | Validation |
 |-------|------|----------|-------------|------------|
 | `timestamp` | `datetime` | Yes | When data was collected (UTC) | Must be valid datetime |
-| `source` | `str` | Yes | Data source identifier | One of: "jupiter", "coingecko" |
+| `source` | `str` | Yes | Data source identifier | One of: "jupiter", "coingecko", "coinkarma" |
 | `sol_price_usd` | `float` | Yes | SOL price in USD/USDT | Must be > 0 |
 | `volume_24h` | `float` | No | 24-hour trading volume (USD) | Must be >= 0 if present |
 | `price_change_24h_pct` | `float` | No | 24-hour price change percentage | Range: -100 to +infinite |
 | `quote_amount` | `int` | No | Jupiter quote output amount (if from Jupiter) | Must be > 0 if present |
+| `pulse_index` | `float` | No | CoinKarma sentiment score (Pulse Index) | Range: typically 0-100 |
+| `liquidity_index` | `float` | No | CoinKarma liquidity indicator for SOL | Must be >= 0 if present |
+| `liquidity_value` | `float` | No | CoinKarma additional liquidity metric | Must be >= 0 if present |
 | `metadata` | `Dict[str, Any]` | No | Additional data source-specific info | JSON-serializable dict |
 
 **Pydantic Implementation**:
@@ -38,7 +41,7 @@ class MarketData(BaseModel):
     timestamp: datetime = Field(
         description="When data was collected (UTC)"
     )
-    source: Literal["jupiter", "coingecko"] = Field(
+    source: Literal["jupiter", "coingecko", "coinkarma"] = Field(
         description="Data source identifier"
     )
     sol_price_usd: float = Field(
@@ -59,6 +62,20 @@ class MarketData(BaseModel):
         gt=0,
         description="Jupiter quote output amount in smallest units"
     )
+    pulse_index: Optional[float] = Field(
+        default=None,
+        description="CoinKarma sentiment score (Pulse Index)"
+    )
+    liquidity_index: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description="CoinKarma liquidity indicator for SOL"
+    )
+    liquidity_value: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description="CoinKarma additional liquidity metric"
+    )
     metadata: Dict[str, Any] = Field(
         default_factory=dict,
         description="Additional source-specific data"
@@ -73,6 +90,9 @@ class MarketData(BaseModel):
                 "volume_24h": 1250000000.0,
                 "price_change_24h_pct": 3.2,
                 "quote_amount": 42150000,
+                "pulse_index": 68.5,
+                "liquidity_index": 42.3,
+                "liquidity_value": 38.7,
                 "metadata": {"slippage_bps": 50}
             }
         }
@@ -302,8 +322,13 @@ System configuration loaded from environment variables and defaults.
 
 | Field | Type | Required | Description | Default |
 |-------|------|----------|-------------|---------|
-| `anthropic_api_key` | `str` | Yes | Anthropic API key | From `ANTHROPIC_API_KEY` env |
+| `openrouter_api_key` | `str` | Yes | OpenRouter API key | From `OPENROUTER_API_KEY` env |
+| `llm_provider` | `str` | No | LLM provider to use | `"claude"` (options: claude/gpt4/deepseek/gemini) |
+| `llm_fallback_provider` | `str` | No | Fallback LLM provider | `"gpt4"` |
+| `coinkarma_token` | `str` | Yes | CoinKarma auth token | From `COINKARMA_TOKEN` env |
+| `coinkarma_device_id` | `str` | Yes | CoinKarma device ID | From `COINKARMA_DEVICE_ID` env |
 | `solana_rpc_url` | `str` | Yes | Solana RPC endpoint | `https://api.mainnet-beta.solana.com` |
+| `wallet_type` | `str` | No | Wallet type (MVP: private_key) | `"private_key"` |
 | `wallet_private_key` | `str` | Yes | Wallet private key (base58) | From `WALLET_PRIVATE_KEY` env |
 | `data_fetch_interval_sec` | `int` | No | Price data fetch interval | `60` |
 | `llm_analysis_interval_sec` | `int` | No | LLM analysis interval | `60` |
@@ -325,15 +350,37 @@ from pydantic_settings import BaseSettings
 class BotConfiguration(BaseSettings):
     """Trading bot configuration from environment variables."""
 
-    # API Keys
-    anthropic_api_key: str = Field(
-        description="Anthropic API key for Claude LLM"
+    # LLM API Keys (Multi-Provider via OpenRouter)
+    openrouter_api_key: str = Field(
+        description="OpenRouter API key for multi-LLM access"
+    )
+    llm_provider: Literal["claude", "gpt4", "deepseek", "gemini"] = Field(
+        default="claude",
+        description="Primary LLM provider"
+    )
+    llm_fallback_provider: Literal["claude", "gpt4", "deepseek", "gemini"] = Field(
+        default="gpt4",
+        description="Fallback LLM provider if primary fails"
+    )
+
+    # CoinKarma API
+    coinkarma_token: str = Field(
+        description="CoinKarma authentication token"
+    )
+    coinkarma_device_id: str = Field(
+        description="CoinKarma device ID"
     )
 
     # Blockchain
     solana_rpc_url: str = Field(
         default="https://api.mainnet-beta.solana.com",
         description="Solana RPC endpoint"
+    )
+
+    # Wallet
+    wallet_type: Literal["private_key"] = Field(
+        default="private_key",
+        description="Wallet type (MVP: private_key only)"
     )
     wallet_private_key: str = Field(
         description="Wallet private key in base58 format"
@@ -422,7 +469,7 @@ TradeExecution (if signal != HOLD)
 ```
 
 **Flow**:
-1. `MarketData` collected from Jupiter/CoinGecko
+1. `MarketData` collected from Jupiter/CoinGecko (price) + CoinKarma (sentiment/liquidity)
 2. Latest `MarketData` sent to LLM → produces `TradingSignal`
 3. If `TradingSignal.signal != "HOLD"` → create `TradeExecution`
 4. All entities persisted to SQLite for audit trail
@@ -441,6 +488,9 @@ CREATE TABLE market_data (
     volume_24h REAL,
     price_change_24h_pct REAL,
     quote_amount INTEGER,
+    pulse_index REAL,
+    liquidity_index REAL,
+    liquidity_value REAL,
     metadata JSON,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

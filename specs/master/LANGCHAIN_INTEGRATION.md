@@ -1,353 +1,516 @@
-# LangChain Integration for Solana Trading Bot
+# LangChain v1.0+ Integration for Solana Trading Bot
 
-**Date**: 2025-11-11 (Updated)
-**Context**: Added LangChain agent framework based on agentipy reference implementation
+**Date**: 2025-11-12 (Updated for v1.0.3+)
+**Context**: Upgraded to LangChain v1.0+ with `create_agent` and `@tool` decorator pattern
 
 ---
 
 ## Overview
 
-The Solana AI Trading Bot now uses **LangChain** as the agent orchestration framework, following the proven pattern from the agentipy project. This enables modular tool design and allows Claude LLM to dynamically select and chain operations.
+The Solana AI Trading Bot uses **LangChain v1.0+** as the agent orchestration framework. Version 1.0+ introduces a simplified, production-ready API with the `create_agent` standard and `@tool` decorator for defining tools.
+
+**Key Benefits of v1.0+**:
+- Simplified agent creation via `create_agent(model, tools, system_prompt)`
+- Function-based tools using `@tool` decorator (more Pythonic)
+- Built-in middleware system (PII detection, summarization, human-in-the-loop)
+- Unified content blocks for cross-provider compatibility
+- Production-ready foundation maintained by LangChain team
 
 ---
 
-## Key Changes
+## Key Changes from 0.3.x
 
-### 1. Dependencies Added
+| Feature | LangChain 0.3.x (Old) | LangChain v1.0+ (New) |
+|---------|----------------------|----------------------|
+| **Tool Definition** | `BaseTool` classes | `@tool` decorator on functions |
+| **Agent Creation** | Manual `AgentExecutor` setup | `create_agent(model, tools)` |
+| **Tool Import** | `from langchain.tools import BaseTool` | `from langchain.tools import tool` |
+| **Agent Import** | `from langchain.agents import AgentExecutor` | `from langchain.agents import create_agent` |
+| **Message Handling** | Provider-specific | Unified `content_blocks` |
+
+---
+
+## Dependencies
 
 ```toml
 [tool.poetry.dependencies]
-langchain = "^0.3.12"
-langchain-anthropic = "^0.3.0"
+langchain = "^1.0.3"      # Production-ready v1.0+ release
+openai = "^1.0.0"         # For OpenRouter (multi-LLM support)
 ```
 
-### 2. Architecture Pattern (from agentipy)
+**Note**: No need for `langchain-anthropic` - use OpenRouter with OpenAI-compatible SDK
 
-**Before** (Direct API calls):
-```
-main.py → data_collector.py → External APIs
-       → llm_analyzer.py → Claude API
-       → trade_executor.py → Jupiter API
-```
+---
 
-**After** (LangChain Agent):
+## Architecture
+
+**Agent Orchestration Flow**:
 ```
-main.py → LangChain AgentExecutor
+main.py → create_agent(model, tools, system_prompt)
           ↓
-       Claude LLM (decides which tools to use)
+       LLM (via OpenRouter) decides which tools to call
           ↓
-       [SolanaFetchPriceTool, SolanaTradeTool, SolanaMarketDataTool]
+       [@tool functions: fetch_price, trade, get_market_data, fetch_karma]
           ↓
-       SolanaAgentKit → External APIs
+       External APIs (Jupiter, CoinGecko, CoinKarma, Solana RPC)
 ```
 
-### 3. New Directory: `langchain_tools/`
+**Key Components**:
+1. **Agent**: Created with `create_agent`, handles tool orchestration
+2. **Tools**: Async functions decorated with `@tool`
+3. **OpenRouter**: Multi-LLM provider (Claude/GPT-4/DeepSeek/Gemini)
+4. **System Prompt**: Defines agent behavior and trading strategy
 
-Following agentipy's `agentipy/langchain/` pattern:
+---
+
+## Tool Definitions (v1.0+ Pattern)
+
+### Directory Structure
 
 ```
 src/solana_trader/langchain_tools/
 ├── __init__.py               # Export all tools
-├── fetch_price.py            # SolanaFetchPriceTool(BaseTool)
-├── execute_trade.py          # SolanaTradeTool(BaseTool)
-└── get_market_data.py        # SolanaMarketDataTool(BaseTool)
+├── fetch_price.py            # @tool: solana_fetch_price
+├── execute_trade.py          # @tool: solana_trade
+├── get_market_data.py        # @tool: solana_get_market_data
+└── fetch_karma_indicators.py # @tool: fetch_coinkarma_indicators
 ```
 
-Each tool:
-- Inherits from `langchain.tools.BaseTool`
-- Has `name`, `description`, and `args_schema` (Pydantic)
-- Receives `SolanaAgentKit` instance for blockchain operations
-- Implements async `_arun()` method
-
----
-
-## Implementation Example
-
-### Tool Definition (agentipy pattern)
+### Example: Price Fetch Tool
 
 ```python
 # langchain_tools/fetch_price.py
-from langchain.tools import BaseTool
-from pydantic import BaseModel, Field
-from typing import Type
+from langchain.tools import tool
+import json
+from datetime import datetime, UTC
+
+@tool
+async def solana_fetch_price(token_address: str) -> str:
+    """Fetch current token price from Jupiter or CoinGecko.
+
+    Args:
+        token_address: Solana token mint address (e.g., "So11111..." for SOL)
+
+    Returns:
+        JSON string with price_usd, volume_24h, price_change_24h_pct.
+        Use this tool when you need current market data for trading decisions.
+    """
+    try:
+        # Access shared data collector service
+        from ..services.data_collector import fetch_price_from_jupiter
+
+        price_data = await fetch_price_from_jupiter(token_address)
+
+        return json.dumps({
+            "status": "success",
+            "token": token_address,
+            "price_usd": price_data["price"],
+            "volume_24h": price_data["volume"],
+            "price_change_24h_pct": price_data["change_24h"],
+            "timestamp": datetime.now(UTC).isoformat()
+        })
+    except Exception as e:
+        return json.dumps({
+            "status": "error",
+            "message": f"Failed to fetch price: {str(e)}"
+        })
+```
+
+### Example: Trade Execution Tool
+
+```python
+# langchain_tools/execute_trade.py
+from langchain.tools import tool
 import json
 
-class FetchPriceInput(BaseModel):
-    """Input schema for price fetch."""
-    token_address: str = Field(
-        description="Solana token mint address (e.g., So11...112 for SOL)"
-    )
+@tool
+async def solana_trade(action: str, amount: float) -> str:
+    """Execute a SOL/USDT trade on Solana via Jupiter.
 
-class SolanaFetchPriceTool(BaseTool):
-    """Fetch current token price from Jupiter or CoinGecko."""
+    Args:
+        action: Trade action - must be "BUY" or "SELL"
+        amount: Amount of SOL to trade (must be positive, respects MAX_TRADE_SIZE)
 
-    name: str = "fetch_solana_price"
-    description: str = """
-    Fetch the current price of a Solana token in USDT.
-    Returns: price_usd, volume_24h, price_change_24h_pct.
-    Use this tool when you need current market data.
+    Returns:
+        JSON string with transaction_signature, status, actual_output_amount.
+        IMPORTANT: Check dry_run_mode before calling. Returns error if limits exceeded.
     """
-    args_schema: Type[BaseModel] = FetchPriceInput
-    solana_kit: SolanaAgentKit  # Injected dependency
+    try:
+        from ..services.trade_executor import TradeExecutor
+        from ..config import BotConfiguration
 
-    async def _arun(self, token_address: str) -> str:
-        """Async execution."""
-        try:
-            # Primary: Jupiter Quote API
-            price = await self.solana_kit.fetch_price(token_address)
+        config = BotConfiguration()
+        executor = TradeExecutor(config)
+
+        # Validate action
+        if action not in ["BUY", "SELL"]:
             return json.dumps({
-                "status": "success",
-                "price_usd": price,
-                "source": "jupiter"
+                "status": "error",
+                "message": "Invalid action. Must be 'BUY' or 'SELL'"
             })
-        except Exception as e:
-            # Backup: CoinGecko
-            return await self._fetch_from_coingecko(token_address)
 
-    def _run(self, token_address: str) -> str:
-        """Sync fallback (required by BaseTool)."""
-        raise NotImplementedError("Use async version")
+        # Execute trade
+        result = await executor.execute_trade(action, amount)
+
+        return json.dumps({
+            "status": "success" if result.success else "failed",
+            "transaction_signature": result.tx_signature,
+            "input_amount": amount,
+            "output_amount": result.output_amount,
+            "dry_run": config.dry_run_mode
+        })
+    except Exception as e:
+        return json.dumps({
+            "status": "error",
+            "message": f"Trade execution failed: {str(e)}"
+        })
 ```
+
+### Example: CoinKarma Indicators Tool
+
+```python
+# langchain_tools/fetch_karma_indicators.py
+from langchain.tools import tool
+import json
+from datetime import datetime, timedelta
+
+@tool
+async def fetch_coinkarma_indicators(symbol: str = "solusdt") -> str:
+    """Fetch sentiment and liquidity indicators from CoinKarma.
+
+    Args:
+        symbol: Token symbol (default: "solusdt" for SOL/USDT pair)
+
+    Returns:
+        JSON string with pulse_index (sentiment 0-100), liquidity_index, liquidity_value.
+        Higher pulse_index = more bullish sentiment. Use for sentiment-based trading signals.
+    """
+    try:
+        from ..coinkarma.karmafetch import get_pulse_index, get_liq_index
+        from ..config import BotConfiguration
+
+        config = BotConfiguration()
+        today = datetime.now().strftime("%Y-%m-%d")
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        # Fetch indicators
+        pulse = await get_pulse_index(yesterday, today, config.coinkarma_token, config.coinkarma_device_id)
+        liq = await get_liq_index(symbol, yesterday, today, config.coinkarma_token, config.coinkarma_device_id)
+
+        # Get latest values
+        latest_pulse = pulse[-1] if pulse else None
+        latest_liq = liq[-1] if liq else None
+
+        return json.dumps({
+            "status": "success",
+            "symbol": symbol,
+            "pulse_index": latest_pulse["value"] if latest_pulse else None,
+            "liquidity_index": latest_liq["liq"] if latest_liq else None,
+            "liquidity_value": latest_liq["value"] if latest_liq else None,
+            "timestamp": datetime.now(UTC).isoformat()
+        })
+    except Exception as e:
+        return json.dumps({
+            "status": "error",
+            "message": f"Failed to fetch CoinKarma indicators: {str(e)}"
+        })
+```
+
+---
+
+## Agent Setup (v1.0+ Pattern)
 
 ### Agent Initialization
 
 ```python
+# services/llm_analyzer.py
+from langchain.agents import create_agent
+from openai import AsyncOpenAI
+from ..langchain_tools import (
+    solana_fetch_price,
+    solana_trade,
+    solana_get_market_data,
+    fetch_coinkarma_indicators
+)
+from ..config import BotConfiguration
+
+class LLMAnalyzer:
+    def __init__(self, config: BotConfiguration):
+        self.config = config
+
+        # Initialize OpenRouter client
+        self.client = AsyncOpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=config.openrouter_api_key
+        )
+
+        # Model mapping
+        self.models = {
+            "claude": "anthropic/claude-3.5-sonnet",
+            "gpt4": "openai/gpt-4-turbo-preview",
+            "deepseek": "deepseek/deepseek-chat",
+            "gemini": "google/gemini-pro-1.5"
+        }
+
+        # Create agent with LangChain v1.0+
+        self.agent = create_agent(
+            model=self.models[config.llm_provider],
+            tools=[
+                solana_fetch_price,
+                solana_trade,
+                solana_get_market_data,
+                fetch_coinkarma_indicators
+            ],
+            system_prompt=self._build_system_prompt()
+        )
+
+    def _build_system_prompt(self) -> str:
+        """Build system prompt for trading agent."""
+        return """You are an expert Solana trading bot analyzing SOL/USDT markets.
+
+Your responsibilities:
+1. Fetch current SOL price using solana_fetch_price
+2. Check sentiment/liquidity using fetch_coinkarma_indicators
+3. Analyze market conditions and generate trading signals
+4. Execute trades via solana_trade when confidence is high (>0.75)
+
+Trading rules:
+- ALWAYS check current price before trading
+- Consider CoinKarma sentiment in your analysis
+- Respect position limits (MAX_TRADE_SIZE from config)
+- Generate clear rationale for each decision
+- Default to HOLD unless strong signal
+
+Output format:
+- signal: "BUY" | "SELL" | "HOLD"
+- confidence: 0.0 to 1.0
+- rationale: Clear explanation of decision
+- market_conditions: Key factors influencing decision
+"""
+
+    async def analyze(self, user_query: str = "Analyze current market and recommend action"):
+        """Run agent analysis."""
+        result = await self.agent.invoke({
+            "messages": [
+                {"role": "user", "content": user_query}
+            ]
+        })
+        return result
+```
+
+### Main Loop Integration
+
+```python
 # main.py
-from langchain.agents import AgentExecutor, create_structured_chat_agent
-from langchain_anthropic import ChatAnthropic
-from solana_trader.langchain_tools import (
-    SolanaFetchPriceTool,
-    SolanaTradeTool,
-    SolanaMarketDataTool
-)
-from solana_trader.agent import SolanaAgentKit
+import asyncio
+from services.llm_analyzer import LLMAnalyzer
+from config import BotConfiguration
+import logging
 
-# Initialize Claude LLM
-llm = ChatAnthropic(
-    model="claude-3-5-sonnet-20241022",
-    api_key=config.anthropic_api_key,
-    temperature=0.7
-)
+async def main():
+    config = BotConfiguration()
+    analyzer = LLMAnalyzer(config)
 
-# Initialize Solana agent (wallet + RPC)
-solana_kit = SolanaAgentKit(
-    private_key=config.wallet_private_key,
-    rpc_url=config.solana_rpc_url
-)
+    logging.info(f"Bot starting in {'DRY-RUN' if config.dry_run_mode else 'LIVE'} mode")
+    logging.info(f"LLM Provider: {config.llm_provider} (fallback: {config.llm_fallback_provider})")
 
-# Create tools list
-tools = [
-    SolanaFetchPriceTool(solana_kit=solana_kit),
-    SolanaTradeTool(solana_kit=solana_kit),
-    SolanaMarketDataTool(solana_kit=solana_kit)
-]
+    try:
+        while True:
+            # Agent decides what tools to call and in what order
+            result = await analyzer.analyze()
 
-# Create agent with tool selection capability
-agent = create_structured_chat_agent(
-    llm=llm,
-    tools=tools,
-    prompt=trading_prompt_template
-)
+            # Agent automatically calls tools and returns final recommendation
+            logging.info(f"Agent result: {result}")
 
-# Agent executor handles tool invocation
-agent_executor = AgentExecutor(
-    agent=agent,
-    tools=tools,
-    verbose=True,
-    handle_parsing_errors=True,
-    max_iterations=5
-)
+            # Wait for next analysis cycle
+            await asyncio.sleep(config.llm_analysis_interval_sec)
 
-# Run agent
-async def analyze_and_trade():
-    result = await agent_executor.ainvoke({
-        "input": """
-        Analyze current SOL/USDT market conditions.
-        If conditions are favorable (strong upward momentum, high volume),
-        execute a BUY trade with 0.05 SOL.
-        Otherwise, explain why conditions are not favorable.
-        """
-    })
-    return result
+    except KeyboardInterrupt:
+        logging.info("Shutting down gracefully...")
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ---
 
-## Benefits vs Direct API Calls
+## Testing Tools
 
-| Aspect | Direct Calls | LangChain Agent |
-|--------|--------------|-----------------|
-| **Tool Selection** | Hardcoded sequence | LLM decides dynamically |
-| **Error Handling** | Manual try/except | Built-in AgentExecutor retry |
-| **Extensibility** | Modify main loop | Add new tool class |
-| **Observability** | Custom logging | LangChain callbacks |
-| **Testing** | Mock each service | Mock individual tools |
-| **Proven Pattern** | Custom | agentipy production-tested |
+### Unit Test Example
+
+```python
+# tests/unit/test_langchain_tools.py
+import pytest
+import json
+from langchain_tools.fetch_price import solana_fetch_price
+
+@pytest.mark.asyncio
+async def test_fetch_price_success(mocker):
+    """Test price fetch tool returns valid data."""
+    # Mock the data collector
+    mock_fetch = mocker.patch("services.data_collector.fetch_price_from_jupiter")
+    mock_fetch.return_value = {
+        "price": 42.15,
+        "volume": 1_250_000_000,
+        "change_24h": 3.2
+    }
+
+    # Call tool
+    result = await solana_fetch_price("So11111111111111111111111111111111111111112")
+
+    # Parse result
+    data = json.loads(result)
+    assert data["status"] == "success"
+    assert data["price_usd"] == 42.15
+    assert "timestamp" in data
+
+@pytest.mark.asyncio
+async def test_fetch_price_error(mocker):
+    """Test price fetch tool handles errors gracefully."""
+    # Mock failure
+    mock_fetch = mocker.patch("services.data_collector.fetch_price_from_jupiter")
+    mock_fetch.side_effect = Exception("API timeout")
+
+    # Call tool
+    result = await solana_fetch_price("invalid_address")
+
+    # Parse result
+    data = json.loads(result)
+    assert data["status"] == "error"
+    assert "API timeout" in data["message"]
+```
 
 ---
 
-## Example Agent Flow
+## Migration from 0.3.x to v1.0+
 
-**User Request**: "Should I buy SOL now?"
+### Code Changes Required
 
-**Agent Execution**:
-1. **Tool: `fetch_solana_price`**
-   - Calls Jupiter API → SOL = $42.15
-   - Returns: `{"price_usd": 42.15, "volume_24h": 1.25B, "change_24h_pct": 3.2}`
+1. **Update Dependencies** (`pyproject.toml`):
+   ```toml
+   langchain = "^0.3.12"  # OLD
+   langchain = "^1.0.3"   # NEW
+   ```
 
-2. **Tool: `get_market_data`**
-   - Aggregates indicators: trend=bullish, volume=high
-   - Returns: `{"trend": "bullish", "volume_assessment": "high"}`
+2. **Replace BaseTool Classes with @tool Functions**:
+   ```python
+   # OLD (0.3.x)
+   class SolanaFetchPriceTool(BaseTool):
+       name = "fetch_price"
+       async def _arun(self, input: str):
+           # implementation
 
-3. **Claude LLM Analysis** (internal reasoning):
-   - "SOL up 3.2% with high volume → bullish momentum"
-   - "Good entry point for long position"
-   - Decision: BUY with 0.05 SOL
+   # NEW (v1.0+)
+   @tool
+   async def solana_fetch_price(token_address: str) -> str:
+       """Docstring becomes tool description."""
+       # implementation
+   ```
 
-4. **Tool: `execute_solana_trade`**
-   - Calls Jupiter swap: 0.05 SOL → USDT
-   - Returns: `{"status": "success", "tx": "5J8Q...xyz"}`
+3. **Replace AgentExecutor with create_agent**:
+   ```python
+   # OLD (0.3.x)
+   agent = create_structured_chat_agent(llm, tools, prompt)
+   executor = AgentExecutor(agent=agent, tools=tools)
 
-5. **Agent Response**:
-   ```json
-   {
-     "action": "BUY",
-     "amount_sol": 0.05,
-     "rationale": "Strong bullish momentum (+3.2%) with high volume...",
-     "transaction": "5J8Q...xyz"
-   }
+   # NEW (v1.0+)
+   agent = create_agent(model="anthropic/claude-3.5-sonnet", tools=tools, system_prompt=prompt)
+   ```
+
+4. **Update Imports**:
+   ```python
+   # OLD
+   from langchain.tools import BaseTool
+   from langchain.agents import AgentExecutor, create_structured_chat_agent
+
+   # NEW
+   from langchain.tools import tool
+   from langchain.agents import create_agent
    ```
 
 ---
 
-## Migration from Direct Calls
+## Best Practices
 
-### Before (services/llm_analyzer.py)
+### Tool Design
+
+1. **Always return JSON strings** - Makes parsing easier for LLM and humans
+2. **Include status field** - `"success"` or `"error"` for error handling
+3. **Detailed docstrings** - LLM reads this to understand when to use tool
+4. **Type hints** - Helps LangChain validate inputs
+5. **Async execution** - All tools should be async for performance
+
+### Agent Configuration
+
+1. **Clear system prompts** - Define trading rules and output format
+2. **Tool selection** - Only include tools relevant to current task
+3. **Error handling** - Tools should catch exceptions and return error JSON
+4. **Logging** - Use structured logging for observability
+
+### Security
+
+1. **Validate inputs** - Check action/amount before executing trades
+2. **Respect limits** - MAX_TRADE_SIZE, MAX_TRADES_PER_DAY, etc.
+3. **Dry-run default** - Always start with DRY_RUN_MODE=true
+4. **No hardcoded secrets** - Use environment variables
+
+---
+
+## Extensibility
+
+### Adding New Tools
+
 ```python
-async def analyze_market(market_data: MarketData) -> TradingSignal:
-    # Manual prompt construction
-    prompt = f"Analyze this data: {market_data.dict()}"
+# langchain_tools/new_tool.py
+from langchain.tools import tool
 
-    # Direct Claude API call
-    response = await anthropic_client.messages.create(...)
+@tool
+async def my_new_tool(param: str) -> str:
+    """Tool description for LLM.
 
-    # Manual JSON parsing
-    signal = json.loads(response.content[0].text)
-    return TradingSignal(**signal)
+    Args:
+        param: Parameter description
+
+    Returns:
+        JSON string with result
+    """
+    # Implementation
+    return json.dumps({"status": "success", "result": ...})
 ```
 
-### After (LangChain Agent)
+Then register in agent:
 ```python
-# main.py
-result = await agent_executor.ainvoke({
-    "input": "Analyze current SOL market and recommend action"
-})
+from ..langchain_tools import my_new_tool
 
-# Agent automatically:
-# 1. Calls fetch_solana_price tool
-# 2. Calls get_market_data tool
-# 3. Analyzes with Claude
-# 4. Optionally calls execute_solana_trade
-# 5. Returns structured result
+agent = create_agent(
+    model="anthropic/claude-3.5-sonnet",
+    tools=[solana_fetch_price, solana_trade, my_new_tool],  # Add here
+    system_prompt=prompt
+)
 ```
 
 ---
 
-## Testing Strategy
+## Advantages Over Direct API Calls
 
-### Unit Tests (Mock Tools)
-```python
-# tests/unit/test_langchain_tools.py
-@pytest.mark.asyncio
-async def test_fetch_price_tool():
-    mock_kit = Mock(SolanaAgentKit)
-    mock_kit.fetch_price.return_value = 42.15
-
-    tool = SolanaFetchPriceTool(solana_kit=mock_kit)
-    result = await tool._arun("So11111111111111111111111111111111111111112")
-
-    assert json.loads(result)["price_usd"] == 42.15
-```
-
-### Integration Tests (Mock LLM)
-```python
-# tests/integration/test_agent_with_tools.py
-@pytest.mark.asyncio
-async def test_agent_can_fetch_and_trade():
-    # Mock LLM to return specific tool calls
-    mock_llm = FakeChatModel(responses=[
-        AIMessage(tool_calls=[
-            {"name": "fetch_solana_price", "args": {"token_address": "SOL"}},
-            {"name": "execute_solana_trade", "args": {"amount": 0.05}}
-        ])
-    ])
-
-    agent_executor = AgentExecutor(agent=..., tools=real_tools)
-    result = await agent_executor.ainvoke({"input": "Buy 0.05 SOL"})
-
-    assert result["output"]["status"] == "success"
-```
+1. **Dynamic Orchestration**: LLM decides tool call order based on context
+2. **Modularity**: Each operation is self-contained and testable
+3. **Extensibility**: Add new data sources/strategies by adding tools
+4. **Observability**: LangChain provides built-in callbacks and logging
+5. **Error Handling**: Tools return structured error messages
+6. **Reusability**: Tools can be shared across different agents
+7. **Type Safety**: Pydantic validation on tool inputs
 
 ---
 
-## Configuration Updates
+## Resources
 
-### .env (New Variables)
-```env
-# Existing
-ANTHROPIC_API_KEY=sk-ant-...
-WALLET_PRIVATE_KEY=...
-SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
-
-# LangChain specific (optional)
-LANGCHAIN_TRACING_V2=true        # Enable LangSmith tracing
-LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-LANGCHAIN_API_KEY=ls__...        # For debugging (optional)
-LANGCHAIN_PROJECT=solana-trader  # Project name in LangSmith
-```
-
-### pyproject.toml
-```toml
-[tool.poetry.dependencies]
-python = "^3.11"
-anthropic = "^0.58.1"
-langchain = "^0.3.12"
-langchain-anthropic = "^0.3.0"
-solana = "^0.35.0"
-solders = "^0.21.0"
-pydantic = "^2.10.4"
-aiohttp = "^3.11.11"
-python-dotenv = "^1.0.1"
-```
+- **LangChain v1.0 Docs**: https://docs.langchain.com/oss/python/releases/langchain-v1
+- **OpenRouter API**: https://openrouter.ai/docs
+- **Tool Decorator Reference**: `from langchain.tools import tool`
+- **Agent Creation**: `from langchain.agents import create_agent`
 
 ---
 
-## References
-
-- **agentipy Source**: `agentipy/agentipy/langchain/` directory
-- **Example Usage**: `agentipy/examples/langChain/CoinGecko/coingecko_chatbot.py`
-- **LangChain Docs**: https://python.langchain.com/docs/modules/agents/
-- **Research Document**: `specs/master/research.md` (Section 6)
-
----
-
-## Next Steps
-
-1. **Implement Core Tools** (in `/speckit.tasks`):
-   - `SolanaFetchPriceTool` - Price from Jupiter/CoinGecko
-   - `SolanaMarketDataTool` - Aggregate indicators
-   - `SolanaTradeTool` - Execute swap via Jupiter
-
-2. **Create Agent Prompt Template**:
-   - System message with trading rules
-   - Tool usage instructions
-   - Output format specification
-
-3. **Test Agent Behavior**:
-   - Verify tool selection logic
-   - Validate error handling
-   - Confirm dry-run mode respects safety limits
-
----
-
-**Status**: Design complete ✅ | Ready for implementation via `/speckit.tasks`
+**Status**: LangChain v1.0+ integration complete ✅
+**Next**: Implement tools and test agent behavior

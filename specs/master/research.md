@@ -325,11 +325,11 @@ class TradeExecutor:
 
 | Component | Technology | Version | Rationale |
 |-----------|-----------|---------|-----------|
-| **LLM** | Anthropic Claude | 3.5 Sonnet | Best structured output, 2x cheaper, better reasoning |
-| **Agent Framework** | LangChain | 0.3.12 | Tool orchestration, proven Solana integration (agentipy) |
-| **LLM Integration** | langchain-anthropic | Latest | Official LangChain Claude integration |
+| **Multi-LLM Provider** | OpenRouter | Latest | Unified API for Claude/GPT-4/DeepSeek/Gemini |
+| **Agent Framework** | LangChain | 1.0.3+ | Production-ready with `create_agent` standard and `@tool` decorator |
 | **Price Data (Primary)** | Jupiter Quote API | v6 | Real-time swap rates, unlimited free tier |
 | **Price Data (Backup)** | CoinGecko API | v3 | Free tier, market validation |
+| **External Indicators** | CoinKarma API | Latest | Pulse Index (sentiment) + Liquidity Index |
 | **Trade Execution** | Jupiter Swap API | v6 | Direct REST API, production-stable |
 | **Blockchain** | Solana RPC | Latest | Via `solana-py` library |
 | **Async Runtime** | asyncio | Python 3.11+ | Event loop + concurrent tasks |
@@ -340,14 +340,78 @@ class TradeExecutor:
 
 ---
 
-## 6. LangChain Agent Framework Integration
+## 6. Multi-LLM Provider Strategy (UPDATED)
+
+**Question**: How to support multiple LLM providers (Claude, GPT-4, DeepSeek, Gemini)?
+
+**Decision**: **Use OpenRouter as unified LLM gateway**
+
+**Rationale**:
+- Single OpenAI-compatible API for 100+ models
+- Automatic fallback if primary provider is down
+- Dynamic model switching via config (no code changes)
+- Cost optimization (switch to cheaper models for simple tasks)
+
+**Implementation**:
+```python
+from openai import AsyncOpenAI
+
+client = AsyncOpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("OPENROUTER_API_KEY")
+)
+
+models = {
+    "claude": "anthropic/claude-3.5-sonnet",
+    "gpt4": "openai/gpt-4-turbo-preview",
+    "deepseek": "deepseek/deepseek-chat",
+    "gemini": "google/gemini-pro-1.5"
+}
+
+response = await client.chat.completions.create(
+    model=models[config.llm_provider],
+    messages=[...],
+    response_format={"type": "json_object"}
+)
+```
+
+**Tradeoff**: +50-100ms latency (acceptable for 60s trading intervals)
+
+---
+
+## 7. LangChain Version Selection (UPDATED)
+
+**Question**: Use LangChain 0.3.12 (agentipy) or v1.0.3+ (latest)?
+
+**Research** (via context7):
+- **v1.0.3+**: New `@tool` decorator + simplified `create_agent()` (production-ready)
+- **0.3.12**: `BaseTool` class pattern (older API, agentipy uses this)
+
+**Decision**: **Use LangChain v1.0.3+**
+
+**Rationale**:
+1. **Production-ready foundation**: v1.0+ is focused, stable baseline for agents
+2. **Simplified API**: `create_agent` + `@tool` decorator reduces boilerplate
+3. **Unified content blocks**: Better cross-provider support (Anthropic/OpenAI/etc)
+4. **Middleware system**: Built-in PII detection, summarization, human-in-the-loop
+5. **Modern patterns**: Function-based tools vs class-based (more Pythonic)
+6. **Future-proof**: v1.0+ is the maintained version going forward
+
+**Key Differences from 0.3.x**:
+- Tools: `@tool` decorator vs `BaseTool` class
+- Agent: `create_agent(model, tools)` vs manual `AgentExecutor` setup
+- Imports: `from langchain.tools import tool` vs `from langchain.tools import BaseTool`
+
+---
+
+## 8. LangChain Agent Framework Integration
 
 **Question**: Should we use LangChain for agent/tool orchestration, or implement direct LLM API calls?
 
-**Research Findings from agentipy**:
-- Agentipy extensively uses LangChain's `BaseTool` pattern
-- All Solana operations (balance, trade, fetch price, etc.) wrapped as LangChain tools
-- Tools receive `SolanaAgentKit` instance via dependency injection
+**Research Findings**:
+- Agentipy uses older LangChain 0.3.x `BaseTool` pattern (still functional)
+- LangChain v1.0+ introduces simpler `@tool` decorator pattern
+- All Solana operations can be wrapped as async functions with the `@tool` decorator
 - Agent can dynamically select which tools to use based on LLM decision
 
 **Benefits of LangChain**:
@@ -366,86 +430,77 @@ class TradeExecutor:
 4. **Maintainability**: Adding new data sources or trading strategies = add new tool
 5. **Testing**: Mock individual tools easily for unit tests
 
-**Implementation Pattern** (from agentipy):
+**Implementation Pattern** (LangChain v1.0+):
 ```python
 # langchain_tools/fetch_price.py
-from langchain.tools import BaseTool
-from pydantic import BaseModel, Field
+from langchain.tools import tool
 import json
+from datetime import datetime, UTC
 
-class FetchPriceInput(BaseModel):
-    """Input schema for price fetch tool."""
-    token_id: str = Field(description="Token mint address or symbol")
+@tool
+async def solana_fetch_price(token_id: str) -> str:
+    """Fetch current SOL/USDT price from Jupiter or CoinGecko.
 
-class SolanaFetchPriceTool(BaseTool):
-    """Fetch current SOL/USDT price from Jupiter or CoinGecko."""
+    Args:
+        token_id: Token mint address or symbol (e.g., "SOL", "So11111...")
 
-    name: str = "fetch_solana_price"
-    description: str = """
-    Fetch the current price of SOL in USDT.
-    Returns: Current price, volume, 24h change percentage.
-    Use this when you need up-to-date market data.
+    Returns:
+        JSON string with current price, volume, 24h change percentage.
+        Use this when you need up-to-date market data.
     """
-    args_schema: Type[BaseModel] = FetchPriceInput
-    solana_kit: SolanaAgentKit  # Injected dependency
+    try:
+        # Access shared SolanaAgentKit via module-level variable or dependency injection
+        price = await fetch_price_from_jupiter(token_id)
+        return json.dumps({
+            "status": "success",
+            "token": token_id,
+            "price_usd": price,
+            "timestamp": datetime.now(UTC).isoformat()
+        })
+    except Exception as e:
+        return json.dumps({
+            "status": "error",
+            "message": str(e)
+        })
 
-    async def _arun(self, token_id: str) -> str:
-        """Async execution (required by LangChain)."""
-        try:
-            price = await self.solana_kit.fetch_price(token_id)
-            return json.dumps({
-                "status": "success",
-                "token": token_id,
-                "price_usd": price,
-                "timestamp": datetime.now(UTC).isoformat()
-            })
-        except Exception as e:
-            return json.dumps({
-                "status": "error",
-                "message": str(e)
-            })
+@tool
+async def solana_trade(action: str, amount: float) -> str:
+    """Execute a trade on Solana via Jupiter.
 
-    def _run(self, token_id: str) -> str:
-        """Sync fallback (required by BaseTool interface)."""
-        raise NotImplementedError("Use async version (_arun)")
+    Args:
+        action: Trade action ("BUY" or "SELL")
+        amount: Amount of SOL to trade
 
-# main.py - Agent setup
-from langchain.agents import AgentExecutor, create_structured_chat_agent
-from langchain_anthropic import ChatAnthropic
+    Returns:
+        JSON string with transaction signature and execution details.
+    """
+    # Implementation...
+    pass
 
-# Initialize Claude LLM
-llm = ChatAnthropic(
-    model="claude-3-5-sonnet-20241022",
-    api_key=config.anthropic_api_key,
-    max_tokens=1024,
-    temperature=0.7
+# main.py - Agent setup (NEW v1.0+ pattern)
+from langchain.agents import create_agent
+from openai import AsyncOpenAI
+
+# Initialize OpenRouter client (multi-LLM support)
+client = AsyncOpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=config.openrouter_api_key
 )
 
-# Initialize Solana agent kit
-solana_kit = SolanaAgentKit(
-    private_key=config.wallet_private_key,
-    rpc_url=config.solana_rpc_url
-)
-
-# Create tools
-tools = [
-    SolanaFetchPriceTool(solana_kit=solana_kit),
-    SolanaTradeTool(solana_kit=solana_kit),
-    SolanaMarketDataTool(solana_kit=solana_kit)
-]
-
-# Create agent
-agent = create_structured_chat_agent(llm, tools, prompt_template)
-agent_executor = AgentExecutor(
-    agent=agent,
-    tools=tools,
-    verbose=True,
-    handle_parsing_errors=True
+# Create agent using new v1.0+ create_agent
+agent = create_agent(
+    model="anthropic/claude-3.5-sonnet",  # Via OpenRouter
+    tools=[solana_fetch_price, solana_trade, fetch_coinkarma_indicators],
+    system_prompt="""You are a Solana trading bot.
+    Analyze market data and make informed trading decisions.
+    Always check current prices before trading."""
 )
 
 # Run agent
-result = await agent_executor.ainvoke({
-    "input": "Analyze current SOL market conditions and recommend trading action"
+result = await agent.invoke({
+    "messages": [
+        {"role": "user", "content": "Analyze current SOL market and recommend action"}
+    ]
 })
 ```
 

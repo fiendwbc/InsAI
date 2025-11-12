@@ -13,17 +13,14 @@ Build a lightweight Python backend service that continuously collects Solana (SO
 
 **Language/Version**: Python 3.11+ (matches agentipy compatibility, modern async support)
 **Primary Dependencies**:
-- `solana` (v0.36.6): Blockchain interaction
-- `solders` (v0.26.0): Solana SDK types
-- `anthropic`: Claude LLM API client (selected after research)
-- `openai`: Openai LLM API
-- `langchain` (v1.0.3): Agent framework and tool abstraction
-- `langchain-anthropic`: LangChain integration for Claude
-- `langchain-openai`: LangChain integration for Openai
+- `solana` (v0.35.0): Blockchain interaction (match agentipy)
+- `solders` (v0.21.0): Solana SDK types (match agentipy)
+- `openai` (^1.0.0): OpenRouter SDK (OpenAI-compatible API for multi-provider support)
+- `langchain` (^1.0.3): Agent framework with new `create_agent` standard and `@tool` decorator
 - `aiohttp`: Async HTTP for API calls
 - `python-dotenv`: Environment config
-- `pydantic` (v2.10+): Data validation
-- `requests`: Price API calls (CoinGecko/Jupiter)
+- `pydantic` (^2.10.4): Data validation
+- `requests`: Price API calls (CoinGecko/Jupiter/CoinKarma)
 
 **Storage**: SQLite (trading history, signals) + JSON files (config backup)
 **Testing**: pytest with pytest-asyncio (async test support)
@@ -97,14 +94,23 @@ src/
 │   ├── services/           # Business logic services
 │   │   ├── __init__.py
 │   │   ├── data_collector.py   # Fetch prices from CoinGecko/Jupiter
-│   │   ├── llm_analyzer.py     # LangChain agent with Claude
+│   │   ├── llm_analyzer.py     # LangChain agent with multi-LLM via OpenRouter
 │   │   ├── trade_executor.py   # Execute trades on Solana (Jupiter swap)
 │   │   └── storage.py          # SQLite persistence for history
-│   ├── langchain_tools/    # LangChain tool definitions (agentipy pattern)
+│   ├── coinkarma/          # CoinKarma API integration (external sentiment data)
 │   │   ├── __init__.py
-│   │   ├── fetch_price.py      # SolanaFetchPriceTool (BaseTool)
-│   │   ├── execute_trade.py    # SolanaTradeTool (BaseTool)
-│   │   └── get_market_data.py  # SolanaMarketDataTool (BaseTool)
+│   │   ├── karmafetch.py   # Pulse Index (sentiment) + Liquidity Index
+│   │   ├── dateutil.py     # Date utilities for CoinKarma queries
+│   │   └── descrypt.py     # AES decryption for CoinKarma responses
+│   ├── wallet/             # Wallet management (MVP: private key, future: adapters)
+│   │   ├── __init__.py
+│   │   └── manager.py      # WalletManager stub (private key for MVP)
+│   ├── langchain_tools/    # LangChain tool definitions (v1.0+ @tool decorator pattern)
+│   │   ├── __init__.py
+│   │   ├── fetch_price.py      # @tool: solana_fetch_price
+│   │   ├── execute_trade.py    # @tool: solana_trade
+│   │   ├── get_market_data.py  # @tool: solana_get_market_data
+│   │   └── fetch_karma_indicators.py  # @tool: fetch_coinkarma_indicators
 │   └── utils/              # Utilities
 │       ├── __init__.py
 │       ├── logger.py       # Structured JSON logging setup
@@ -132,12 +138,13 @@ pyproject.toml              # Poetry dependencies (Python 3.11+)
 README.md                   # Project overview
 ```
 
-**Structure Decision**: Single project structure selected. Backend-only service with no frontend/API. Clean separation: models (data schemas), services (business logic), langchain_tools (agent tools following agentipy BaseTool pattern), utils (cross-cutting concerns). Tests organized by type (unit/integration/contract/performance) per constitution requirements.
+**Structure Decision**: Single project structure selected. Backend-only service with no frontend/API. Clean separation: models (data schemas), services (business logic), langchain_tools (agent tools using v1.0+ @tool decorator), utils (cross-cutting concerns). Tests organized by type (unit/integration/contract/performance) per constitution requirements.
 
-**LangChain Integration Pattern** (from agentipy):
-- All Solana operations exposed as LangChain `BaseTool` subclasses
-- Tools receive `SolanaAgentKit` instance for blockchain interaction
-- Agent orchestrates tool calls via LangChain's agent framework
+**LangChain Integration Pattern** (v1.0+):
+- All Solana operations exposed as LangChain tools using `@tool` decorator
+- Tools defined as async functions with type hints and docstrings
+- Agent created with `create_agent(model, tools, system_prompt)`
+- Agent orchestrates tool calls via LangChain's new agent framework
 - Enables LLM to decide when to fetch prices, analyze data, or execute trades
 
 ## Complexity Tracking
@@ -153,35 +160,39 @@ README.md                   # Project overview
 **Status**: ✅ Completed | **Output**: `research.md`
 
 **Key Decisions Made**:
-1. **LLM Provider**: Anthropic Claude 3.5 Sonnet (2x cheaper, better structured output)
-2. **Price Data**: Jupiter Quote API (primary) + CoinGecko (backup)
-3. **Trade Execution**: Jupiter v6 REST API (production-stable, no experimental SDK)
-4. **Async Pattern**: asyncio event loop with signal handling for graceful shutdown
-5. **Risk Management**: Dry-run mode default, position sizing, circuit breakers
+1. **Multi-LLM Provider**: OpenRouter unified API (Claude/GPT-4/DeepSeek/Gemini via OpenAI-compatible SDK)
+2. **LangChain Version**: v1.0.3+ (production-ready with `create_agent` standard and `@tool` decorator)
+3. **Price Data**: Jupiter Quote API (primary) + CoinGecko (backup)
+4. **External Indicators**: CoinKarma Pulse Index (sentiment) + Liquidity Index
+5. **Trade Execution**: Jupiter v6 REST API (production-stable, no experimental SDK)
+6. **Async Pattern**: asyncio event loop with signal handling for graceful shutdown
+7. **Risk Management**: Dry-run mode default, position sizing, circuit breakers
 
 ---
 
 ## Phase 1: Design Summary
 
-**Status**: ✅ Completed (Updated with LangChain) | **Outputs**:
+**Status**: ✅ Completed (Updated with LangChain v1.0.3+ + REVISIONS) | **Outputs**:
 - `data-model.md` - 4 Pydantic entities with SQLite schema
 - `contracts/llm-signals.schema.json` - LLM response contract
-- `quickstart.md` - 15-minute deployment guide
-- `research.md` - Updated with LangChain agent framework decision
+- `quickstart.md` - 15-minute deployment guide (🚧 DRAFT - to be updated post-implementation)
+- `research.md` - Updated with LangChain v1.0.3+ decision, OpenRouter multi-LLM strategy
+- `REVISIONS.md` - Critical updates addressing 6 design issues
 
 **Entities Defined**:
-1. `MarketData` - Price and indicators from APIs
+1. `MarketData` - Price and indicators from APIs (includes CoinKarma sentiment/liquidity)
 2. `TradingSignal` - LLM decision with confidence and rationale
 3. `TradeExecution` - Blockchain transaction records
-4. `BotConfiguration` - Environment-based settings
+4. `BotConfiguration` - Environment-based settings (multi-LLM provider, wallet type)
 
 **API Contract**: Strict JSON schema for LLM signals (BUY/SELL/HOLD + market_conditions)
 
-**LangChain Integration**:
-- Agent framework for tool orchestration (following agentipy pattern)
-- All Solana operations wrapped as `BaseTool` subclasses
-- Tools: `SolanaFetchPriceTool`, `SolanaTradeTool`, `SolanaMarketDataTool`
-- Claude LLM dynamically selects and executes tools via `AgentExecutor`
+**LangChain Integration** (v1.0.3+):
+- Agent framework using new `create_agent` standard
+- All Solana operations defined as tools using `@tool` decorator
+- Tools: `solana_fetch_price`, `solana_trade`, `solana_get_market_data`, `fetch_coinkarma_indicators`
+- Multi-LLM support via OpenRouter (Claude/GPT-4/DeepSeek/Gemini)
+- Agent dynamically selects and executes tools based on LLM reasoning
 
 ---
 

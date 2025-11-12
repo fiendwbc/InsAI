@@ -1,5 +1,9 @@
 # Quickstart Guide: Solana AI Trading Bot
 
+🚧 **DRAFT - Under Development** 🚧
+
+**Status**: This guide is created before implementation as an executable specification. It will be updated with actual commands and outputs after code implementation completes.
+
 **Target Time**: 15 minutes from clone to running
 
 This guide walks you through setting up and running the Solana AI trading bot in dry-run mode (safe simulation without real trades).
@@ -12,7 +16,8 @@ Before starting, ensure you have:
 
 - **Python 3.11+** installed (`python --version`)
 - **Poetry** package manager (`pip install poetry`)
-- **Anthropic API key** (sign up at https://console.anthropic.com)
+- **OpenRouter API key** (sign up at https://openrouter.ai - provides access to Claude, GPT-4, DeepSeek, Gemini)
+- **CoinKarma credentials** (authentication token + device ID from CoinKarma dashboard)
 - **Solana wallet** with private key (create with `solana-keygen new`)
 - **Git** for cloning the repository
 
@@ -32,13 +37,13 @@ poetry shell
 ```
 
 **Dependencies installed**:
-- `anthropic` - LLM API client
-- `langchain` (v0.3.12) - Agent framework for tool orchestration
-- `langchain-anthropic` - LangChain integration with Claude
-- `solana` - Blockchain interaction
-- `solders` - Solana SDK types
+- `openai` (^1.0.0) - OpenRouter SDK (OpenAI-compatible API for multi-LLM support)
+- `langchain` (^1.0.3) - Agent framework with `create_agent` standard and `@tool` decorator
+- `solana` (^0.35.0) - Blockchain interaction
+- `solders` (^0.21.0) - Solana SDK types
+- `requests` - HTTP client for CoinGecko/Jupiter/CoinKarma APIs
 - `aiohttp` - Async HTTP requests
-- `pydantic` - Data validation
+- `pydantic` (^2.10.4) - Data validation
 - `python-dotenv` - Environment config
 - `structlog` - Structured logging
 - `pytest` - Testing framework
@@ -60,11 +65,18 @@ cp .env.example .env
 
 **Required Configuration** (`.env`):
 ```env
-# Anthropic API
-ANTHROPIC_API_KEY=sk-ant-api03-...your-key-here
+# Multi-LLM via OpenRouter
+OPENROUTER_API_KEY=sk-or-v1-...your-key-here
+LLM_PROVIDER=claude                # Options: claude, gpt4, deepseek, gemini
+LLM_FALLBACK_PROVIDER=gpt4
+
+# CoinKarma Indicators (sentiment + liquidity data)
+COINKARMA_TOKEN=Bearer eyJ...your-token-here
+COINKARMA_DEVICE_ID=8286013b...your-device-id
 
 # Solana Wallet (base58 private key)
 # ⚠️ IMPORTANT: Use a TEST WALLET with minimal funds initially
+WALLET_TYPE=private_key
 WALLET_PRIVATE_KEY=your-base58-private-key-here
 
 # Solana RPC (use public endpoint for testing)
@@ -104,7 +116,9 @@ Test your setup without starting the bot:
 poetry run python -m solana_trader.config
 
 # Expected output:
-# ✓ Anthropic API key: Valid (sk-ant-...)
+# ✓ OpenRouter API key: Valid (sk-or-v1-...)
+# ✓ LLM Provider: claude (fallback: gpt4)
+# ✓ CoinKarma Auth: Valid
 # ✓ Wallet address: 7xKx...ABC
 # ✓ Solana RPC: Responding (latency: 120ms)
 # ✓ Dry-run mode: ENABLED (safe to test)
@@ -112,7 +126,8 @@ poetry run python -m solana_trader.config
 ```
 
 **Troubleshooting**:
-- `Invalid API key`: Check `ANTHROPIC_API_KEY` in `.env`
+- `Invalid API key`: Check `OPENROUTER_API_KEY` in `.env`
+- `CoinKarma auth failed`: Verify `COINKARMA_TOKEN` and `COINKARMA_DEVICE_ID`
 - `Wallet error`: Ensure `WALLET_PRIVATE_KEY` is base58 format
 - `RPC timeout`: Try alternative RPC (e.g., QuickNode, Alchemy)
 
@@ -254,7 +269,12 @@ SELECT * FROM trade_executions WHERE status='success' ORDER BY timestamp DESC LI
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | - | Anthropic API key for Claude |
+| `OPENROUTER_API_KEY` | Yes | - | OpenRouter API key for multi-LLM access |
+| `LLM_PROVIDER` | No | `claude` | Primary LLM provider (claude/gpt4/deepseek/gemini) |
+| `LLM_FALLBACK_PROVIDER` | No | `gpt4` | Fallback LLM provider |
+| `COINKARMA_TOKEN` | Yes | - | CoinKarma authentication token |
+| `COINKARMA_DEVICE_ID` | Yes | - | CoinKarma device ID |
+| `WALLET_TYPE` | No | `private_key` | Wallet type (MVP: private_key only) |
 | `WALLET_PRIVATE_KEY` | Yes | - | Solana wallet private key (base58) |
 | `SOLANA_RPC_URL` | No | `https://api.mainnet-beta.solana.com` | Solana RPC endpoint |
 | `DRY_RUN_MODE` | No | `true` | Simulate trades without execution |
@@ -308,8 +328,8 @@ Start with `MAX_TRADE_SIZE_SOL=0.01` and `MAX_TRADES_PER_DAY=5`:
 
 ### Bot Won't Start
 
-**Error**: `pydantic.ValidationError: ANTHROPIC_API_KEY field required`
-- **Fix**: Add `ANTHROPIC_API_KEY=sk-ant-...` to `.env`
+**Error**: `pydantic.ValidationError: OPENROUTER_API_KEY field required`
+- **Fix**: Add `OPENROUTER_API_KEY=sk-or-v1-...` to `.env`
 
 **Error**: `solana.rpc.core.RPCException: Too Many Requests`
 - **Fix**: Use paid RPC (QuickNode, Helius) or reduce fetch frequency
@@ -320,8 +340,9 @@ Start with `MAX_TRADE_SIZE_SOL=0.01` and `MAX_TRADES_PER_DAY=5`:
 ### No Trading Signals Generated
 
 **Issue**: Bot fetches data but LLM always returns HOLD
-- **Check**: Review `market_data` table - is price data valid?
-- **Check**: Anthropic API key has credits (https://console.anthropic.com)
+- **Check**: Review `market_data` table - is price data valid? Are CoinKarma indicators present?
+- **Check**: OpenRouter API key has credits (https://openrouter.ai/credits)
+- **Check**: Selected LLM provider is available (try switching `LLM_PROVIDER` to fallback)
 - **Fix**: Increase `LOG_LEVEL=DEBUG` to see LLM prompts and responses
 
 ### Trades Failing
