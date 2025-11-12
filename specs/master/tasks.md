@@ -60,7 +60,7 @@
   - Run: `uv add --dev ruff>=0.1.0 black>=24.0.0 mypy>=1.8.0 types-requests>=2.31.0`
 
 - [ ] SETUP-006 Create environment configuration (file: .env.example)
-  - Copy from specs/master/.env.example template
+  - Copy from .env.example template
   - Document all required variables with comments
   - Set DRY_RUN_MODE=true as default
 

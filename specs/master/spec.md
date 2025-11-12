@@ -77,10 +77,7 @@ The system continuously fetches Solana (SOL) price data and technical indicators
 
 ### Functional Requirements
 
-- **FR-001**: System MUST fetch SOL/USDT price data from at least one external API (CoinGecko, Jupiter, or Pyth)
-- **FR-002**: System MUST collect data at configurable intervals (default: every 60 seconds)
-- **FR-003**: System MUST aggregate technical indicators (price, volume, trend) for LLM analysis
-- **FR-004**: System MUST send market data to LLM (OpenAI, Anthropic, or similar) for trade decision
+**MVP Core (US3-P1, US2-P2) - MUST requirements**:
 - **FR-005**: System MUST parse LLM response into structured trading signal (BUY/SELL/HOLD + rationale)
 - **FR-006**: System MUST execute SOL/USDT swaps using Solana blockchain APIs (Jupiter aggregator)
 - **FR-007**: System MUST validate wallet balance before executing trades
@@ -90,8 +87,16 @@ The system continuously fetches Solana (SOL) price data and technical indicators
 - **FR-011**: System MUST store trading history persistently (SQLite or JSON file)
 - **FR-012**: System MUST load configuration from environment variables (.env file)
 - **FR-013**: System MUST support dry-run mode (simulate trades without blockchain execution)
-- **FR-014**: System MUST implement rate limiting for external API calls to avoid throttling
 - **FR-015**: System MUST validate LLM responses before executing trades
+- **FR-016**: System MUST provide LangChain tools for wallet balance queries and trade execution
+- **FR-017**: System MUST enable LLM to control trades via natural language prompts with safety guardrails
+
+**Automated Data Collection (US1-P3) - SHOULD requirements (deferred)**:
+- **FR-001**: System SHOULD fetch SOL/USDT price data from at least one external API (CoinGecko, Jupiter, or Pyth)
+- **FR-002**: System SHOULD collect data at configurable intervals (default: every 60 seconds)
+- **FR-003**: System SHOULD aggregate technical indicators (price, volume, trend) for LLM analysis
+- **FR-004**: System SHOULD send market data to LLM automatically, OR accept user prompts with market context
+- **FR-014**: System SHOULD implement rate limiting for external API calls to avoid throttling
 
 ### Key Entities
 
@@ -102,12 +107,17 @@ The system continuously fetches Solana (SOL) price data and technical indicators
 
 ## Success Criteria *(mandatory)*
 
-### Measurable Outcomes
+### Measurable Outcomes (MVP: US3-P1, US2-P2)
 
-- **SC-001**: System successfully fetches SOL price data every 60 seconds with <5% failure rate over 24 hours
 - **SC-002**: LLM generates valid trading signals (BUY/SELL/HOLD) in <10 seconds per analysis
 - **SC-003**: Trade execution completes in <30 seconds from signal to on-chain confirmation (excluding blockchain congestion)
 - **SC-004**: System handles API failures gracefully - no crashes, automatic retry with backoff
 - **SC-005**: All trading decisions and executions are logged with complete traceability (timestamp, signal, rationale, tx signature)
 - **SC-006**: Dry-run mode can operate for 1 hour without errors, demonstrating end-to-end flow without financial risk
 - **SC-007**: System can be deployed and configured by following quickstart guide in <15 minutes
+- **SC-008**: LLM can successfully check wallet balance and execute test trades via natural language prompts
+- **SC-009**: Manual trading CLI can execute both BUY and SELL trades on mainnet with <5% failure rate
+
+### Future Enhancements (US1-P3 - Automated Data Collection)
+
+- **SC-001** *(deferred)*: System successfully fetches SOL price data every 60 seconds with <5% failure rate over 24 hours

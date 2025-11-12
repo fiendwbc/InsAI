@@ -12,7 +12,8 @@
       "WebFetch(domain:roguelynn.com)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:intuitionlabs.ai)",
-      "Bash(powershell -ExecutionPolicy Bypass -File .specify/scripts/powershell/update-agent-context.ps1:*)"
+      "Bash(powershell -ExecutionPolicy Bypass -File .specify/scripts/powershell/update-agent-context.ps1:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File .specify/scripts/powershell/check-prerequisites.ps1 -Json)"
     ],
     "deny": [],
     "ask": []

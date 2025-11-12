@@ -108,18 +108,30 @@ LLM decision output indicating trading action and reasoning.
 
 **Purpose**: Structured format for LLM trading decisions with confidence and rationale.
 
+**⚠️ IMPORTANT - Two-Layer Design**:
+- **LLM Contract** (`contracts/llm-signals.schema.json`): Defines what LLM MUST generate
+  - Required from LLM: `signal`, `confidence`, `rationale`, `market_conditions`
+- **Data Model** (this Pydantic model): Includes LLM fields + server-side metadata
+  - Added by server: `timestamp` (current time), `llm_model` (from config), `analysis_duration_sec` (measured)
+
+**Implementation Flow**:
+1. LLM generates JSON matching contract (4 required fields)
+2. Server validates JSON against schema
+3. Server creates TradingSignal by adding metadata fields (timestamp, llm_model, duration)
+4. Full TradingSignal saved to database
+
 **Fields**:
 
-| Field | Type | Required | Description | Validation |
-|-------|------|----------|-------------|------------|
-| `timestamp` | `datetime` | Yes | When signal was generated (UTC) | Must be valid datetime |
-| `signal` | `str` | Yes | Trading action | One of: "BUY", "SELL", "HOLD" |
-| `confidence` | `float` | Yes | LLM confidence score | Range: 0.0 to 1.0 |
-| `rationale` | `str` | Yes | Explanation for the decision | Min length: 10 chars |
-| `suggested_amount_sol` | `float` | No | Suggested trade size (SOL) | Must be > 0 if present |
-| `market_conditions` | `MarketConditions` | Yes | Key market factors in decision | Must include: trend, volume_assessment, volatility, risk_level |
-| `llm_model` | `str` | Yes | LLM model used | e.g., "claude-3-5-sonnet-20241022" |
-| `analysis_duration_sec` | `float` | No | Time taken for LLM analysis | Must be >= 0 |
+| Field | Type | Required | Source | Description | Validation |
+|-------|------|----------|--------|-------------|------------|
+| `signal` | `str` | Yes | **LLM** | Trading action | One of: "BUY", "SELL", "HOLD" |
+| `confidence` | `float` | Yes | **LLM** | LLM confidence score | Range: 0.0 to 1.0 |
+| `rationale` | `str` | Yes | **LLM** | Explanation for the decision | Min length: 10 chars |
+| `market_conditions` | `MarketConditions` | Yes | **LLM** | Key market factors in decision | Must include: trend, volume_assessment, volatility, risk_level |
+| `suggested_amount_sol` | `float` | No | **LLM** | Suggested trade size (SOL) | Must be > 0 if present |
+| `timestamp` | `datetime` | Yes | **Server** | When signal was generated (UTC) | Auto-set to current time |
+| `llm_model` | `str` | Yes | **Server** | LLM model identifier | From BotConfiguration |
+| `analysis_duration_sec` | `float` | No | **Server** | Time taken for LLM analysis | Measured start to finish |
 
 **Pydantic Implementation**:
 ```python

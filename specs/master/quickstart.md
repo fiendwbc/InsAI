@@ -379,24 +379,42 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies using uv (no virtual environment in container)
 RUN uv sync --no-dev
 
-# Copy application
+# Copy application source
 COPY src/ ./src/
-COPY .env .env
+
+# Copy environment template (NOT real .env with secrets!)
+COPY .env.example ./.env.example
 
 # Run bot
 CMD ["uv", "run", "python", "-m", "solana_trader.main"]
 ```
 
+**⚠️ SECURITY WARNING**:
+- **NEVER** `COPY .env` into Docker image - this embeds secrets (API keys, wallet private keys) into the image layers
+- Anyone with access to the image can extract these secrets using `docker history` or `docker save`
+- Always provide secrets at runtime via `--env-file` or environment variables
+
 ### Run Container
 
 ```bash
-# Build
+# Build image (does NOT contain secrets)
 docker build -t solana-trader-bot .
 
-# Run
+# Run with secrets provided at runtime (SECURE)
 docker run -d \
   --name trading-bot \
   --env-file .env \
+  -v $(pwd)/trading_bot.db:/app/trading_bot.db \
+  -v $(pwd)/logs:/app/logs \
+  solana-trader-bot
+
+# Alternative: Pass specific environment variables (SECURE)
+docker run -d \
+  --name trading-bot \
+  -e OPENROUTER_API_KEY="sk-or-v1-..." \
+  -e COINKARMA_TOKEN="Bearer eyJ..." \
+  -e WALLET_PRIVATE_KEY="..." \
+  -e DRY_RUN_MODE="true" \
   -v $(pwd)/trading_bot.db:/app/trading_bot.db \
   -v $(pwd)/logs:/app/logs \
   solana-trader-bot
@@ -406,6 +424,28 @@ docker logs -f trading-bot
 
 # Stop
 docker stop trading-bot
+
+# Remove container (keeps database and logs in host volumes)
+docker rm trading-bot
+```
+
+**Docker Security Best Practices**:
+1. ✅ Build image without secrets (`COPY .env.example` only)
+2. ✅ Provide secrets at runtime (`--env-file .env` or `-e VAR=value`)
+3. ✅ Use volumes for persistent data (database, logs)
+4. ✅ Never commit images with embedded secrets to registries
+5. ✅ Use `.dockerignore` to exclude `.env` files from build context
+
+**`.dockerignore` example**:
+```
+# Exclude sensitive files from Docker build context
+.env
+*.db
+logs/
+.git/
+__pycache__/
+*.pyc
+.venv/
 ```
 
 ---
