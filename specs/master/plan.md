@@ -13,11 +13,13 @@ Build a lightweight Python backend service that continuously collects Solana (SO
 
 **Language/Version**: Python 3.11+ (matches agentipy compatibility, modern async support)
 **Primary Dependencies**:
-- `solana` (v0.35.0): Blockchain interaction
-- `solders` (v0.21.0): Solana SDK types
+- `solana` (v0.36.6): Blockchain interaction
+- `solders` (v0.26.0): Solana SDK types
 - `anthropic`: Claude LLM API client (selected after research)
-- `langchain` (v0.3.12): Agent framework and tool abstraction
+- `openai`: Openai LLM API
+- `langchain` (v1.0.3): Agent framework and tool abstraction
 - `langchain-anthropic`: LangChain integration for Claude
+- `langchain-openai`: LangChain integration for Openai
 - `aiohttp`: Async HTTP for API calls
 - `python-dotenv`: Environment config
 - `pydantic` (v2.10+): Data validation

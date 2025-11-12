@@ -21,7 +21,7 @@ FOLLOW-UP TODOS: None
 Code MUST be clear, maintainable, and self-documenting. Every module MUST have a single, well-defined responsibility. Complex logic MUST be broken into comprehensible units with explicit naming that reveals intent.
 
 **Non-negotiables**:
-- No functions exceeding 50 lines without documented justification
+- No functions exceeding 100 lines without documented justification
 - No magic numbers or unexplained constants - use named constants with clear intent
 - All public interfaces MUST have comprehensive docstrings (Google style for Python, JSDoc for TypeScript)
 - Code reviews MUST verify readability before merge - "clever" code is rejected unless proven necessary

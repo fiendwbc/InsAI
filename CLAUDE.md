@@ -3,6 +3,7 @@
 Auto-generated from all feature plans. Last updated: 2025-11-11
 
 ## Active Technologies
+- SQLite (trading history, signals) + JSON files (config backup) (master)
 
 - Python 3.11+ (matches agentipy compatibility, modern async support) (master)
 
