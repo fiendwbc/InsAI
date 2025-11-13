@@ -1,5 +1,6 @@
 agentipy/
 .vscode/
+nul
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
