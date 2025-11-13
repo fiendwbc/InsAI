@@ -121,7 +121,7 @@
 
 ### Data Models
 
-- [ ] TRADE-001 [P] [US3] Implement TradeExecution Pydantic model (file: src/solana_trader/models/trade_execution.py)
+- [X] TRADE-001 [P] [US3] Implement TradeExecution Pydantic model (file: src/solana_trader/models/trade_execution.py)
   - Fields: timestamp, signal, input_token, output_token, input_amount
   - Fields: output_amount, expected_output, slippage_bps, status
   - Fields: transaction_signature, error_message, execution_duration_sec, gas_fee_sol
@@ -131,7 +131,7 @@
 
 ### Wallet Management
 
-- [ ] TRADE-002 [P] [US3] Implement wallet manager (file: src/solana_trader/wallet/manager.py)
+- [X] TRADE-002 [P] [US3] Implement wallet manager (file: src/solana_trader/wallet/manager.py)
   - Class: WalletManager
   - Load: Private key from BotConfiguration.wallet_private_key (base58)
   - Method: `get_keypair() -> Keypair` - return solders.Keypair from base58
@@ -141,7 +141,7 @@
 
 ### Solana RPC Client
 
-- [ ] TRADE-003 [US3] Initialize Solana RPC client (file: src/solana_trader/services/trade_executor.py - __init__)
+- [X] TRADE-003 [US3] Initialize Solana RPC client (file: src/solana_trader/services/trade_executor.py - __init__)
   - Import: `from solana.rpc.async_api import AsyncClient`
   - Create: `self.solana_client = AsyncClient(config.solana_rpc_url)`
   - Method: `async def get_recent_blockhash() -> str`
@@ -150,7 +150,7 @@
 
 ### Jupiter Integration
 
-- [ ] TRADE-004 [US3] Implement Jupiter quote fetcher (file: src/solana_trader/services/trade_executor.py - get_jupiter_quote)
+- [X] TRADE-004 [US3] Implement Jupiter quote fetcher (file: src/solana_trader/services/trade_executor.py - get_jupiter_quote)
   - Function: `async def get_jupiter_quote(input_mint: str, output_mint: str, amount: int, slippage_bps: int) -> dict`
   - Query: GET `https://quote-api.jup.ag/v6/quote`
   - Params: inputMint, outputMint, amount (in lamports), slippageBps
@@ -159,7 +159,7 @@
   - Apply @retry decorator
   - Test: Mock aiohttp, verify quote parsing
 
-- [ ] TRADE-005 [US3] Implement Jupiter swap transaction builder (file: src/solana_trader/services/trade_executor.py - build_swap_transaction)
+- [X] TRADE-005 [US3] Implement Jupiter swap transaction builder (file: src/solana_trader/services/trade_executor.py - build_swap_transaction)
   - Function: `async def build_swap_transaction(quote: dict, user_pubkey: str) -> bytes`
   - Query: POST `https://quote-api.jup.ag/v6/swap`
   - Body: {"quoteResponse": quote, "userPublicKey": user_pubkey, "wrapAndUnwrapSol": true}
@@ -168,7 +168,7 @@
   - Apply @retry decorator
   - Test: Mock aiohttp, verify transaction bytes format
 
-- [ ] TRADE-006 [US3] Implement trade execution with signing (file: src/solana_trader/services/trade_executor.py - execute_trade)
+- [X] TRADE-006 [US3] Implement trade execution with signing (file: src/solana_trader/services/trade_executor.py - execute_trade)
   - Method: `async def execute_trade(action: str, amount_sol: float, dry_run: bool = True) -> TradeExecution`
   - Check: Trade limits (max_trade_size, max_per_day, max_per_hour)
   - Check: Circuit breaker (if price_change > 20% in 1 hour, abort)
@@ -186,7 +186,7 @@
 
 ### Storage
 
-- [ ] TRADE-007 [US3] Implement trade execution persistence (file: src/solana_trader/services/storage.py - save_trade_execution)
+- [X] TRADE-007 [US3] Implement trade execution persistence (file: src/solana_trader/services/storage.py - save_trade_execution)
   - Function: `async def save_trade_execution(execution: TradeExecution) -> int`
   - Insert into trade_executions table
   - Return: Row ID of inserted record
@@ -194,7 +194,7 @@
 
 ### Manual Trading CLI (for testing)
 
-- [ ] TRADE-008 [US3] Create manual trading CLI script (file: src/solana_trader/scripts/manual_trade.py)
+- [X] TRADE-008 [US3] Create manual trading CLI script (file: src/solana_trader/scripts/manual_trade.py)
   - CLI args: `--action BUY|SELL --amount 0.01 [--dry-run]`
   - Load config from .env
   - Initialize WalletManager and TradeExecutor
