@@ -24,7 +24,18 @@
       "Bash(else echo \"NOT_FOUND\")",
       "Bash(fi)",
       "Bash(git rev-parse:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(uv init:*)",
+      "Bash(for dir in src/solana_trader src/solana_trader/models src/solana_trader/services src/solana_trader/langchain_tools src/solana_trader/coinkarma src/solana_trader/wallet src/solana_trader/utils src/solana_trader/scripts)",
+      "Bash(do touch \"$dir/__init__.py\")",
+      "Bash(done)",
+      "Bash(uv sync:*)",
+      "Bash(if [ -f .env.example ])",
+      "Bash(if [ -f .gitignore ])",
+      "Bash(if [ -f Dockerfile ])",
+      "Bash([ -f Dockerfile.* ])",
+      "Bash(then echo \"DOCKERFILE_EXISTS\")",
+      "Bash(else echo \"NO_DOCKERFILE\")"
     ],
     "deny": [],
     "ask": []
