@@ -236,7 +236,7 @@
 
 ### Data Models
 
-- [ ] LLM-001 [P] [US2] Implement TradingSignal Pydantic model (file: src/solana_trader/models/trading_signal.py)
+- [X] LLM-001 [P] [US2] Implement TradingSignal Pydantic model (file: src/solana_trader/models/trading_signal.py)
   - Fields: timestamp, signal, confidence, rationale, suggested_amount_sol
   - Fields: market_conditions, llm_model, analysis_duration_sec
   - Validation: signal in ["BUY", "SELL", "HOLD"], confidence 0-1, rationale min 10 chars
@@ -245,7 +245,7 @@
 
 ### LangChain Tools (v1.0+ @tool decorator pattern)
 
-- [ ] LLM-002 [P] [US2] Implement execute_trade tool (file: src/solana_trader/langchain_tools/execute_trade.py)
+- [X] LLM-002 [P] [US2] Implement execute_trade tool (file: src/solana_trader/langchain_tools/execute_trade.py)
   - Decorator: `@tool`
   - Function: `async def solana_trade(action: str, amount: float, dry_run: bool = True) -> str`
   - Docstring: "Execute a trade on Solana via Jupiter. Args: action ('BUY' or 'SELL'), amount (SOL), dry_run (default True for safety). Returns JSON with transaction signature and execution status."
@@ -253,7 +253,7 @@
   - Return: JSON string with transaction_signature, status, execution_duration_sec, error_message (if failed)
   - Test: Unit test with mocked TradeExecutor
 
-- [ ] LLM-003 [P] [US2] Implement get_wallet_balance tool (file: src/solana_trader/langchain_tools/wallet_info.py)
+- [X] LLM-003 [P] [US2] Implement get_wallet_balance tool (file: src/solana_trader/langchain_tools/wallet_info.py)
   - Decorator: `@tool`
   - Function: `async def get_wallet_balance() -> str`
   - Docstring: "Get current wallet balances for SOL and USDT. Use this before making trading decisions to ensure sufficient funds."
@@ -263,13 +263,13 @@
 
 ### LLM Service
 
-- [ ] LLM-004 [US2] Implement OpenRouter client (file: src/solana_trader/services/llm_analyzer.py - LLMAnalyzer.__init__)
+- [X] LLM-004 [US2] Implement OpenRouter client (file: src/solana_trader/services/llm_analyzer.py - LLMAnalyzer.__init__)
   - Initialize: `openai.AsyncOpenAI` with base_url="https://openrouter.ai/api/v1"
   - Load API key from BotConfiguration.openrouter_api_key
   - Model mapping: {"claude": "anthropic/claude-3.5-sonnet", "gpt4": "openai/gpt-4-turbo-preview", "deepseek": "deepseek/deepseek-chat", "gemini": "google/gemini-pro-1.5"}
   - Test: Verify client initialization, test API key validity
 
-- [ ] LLM-005 [US2] Create LangChain agent with trading tools (file: src/solana_trader/services/llm_analyzer.py - create_trading_agent)
+- [X] LLM-005 [US2] Create LangChain agent with trading tools (file: src/solana_trader/services/llm_analyzer.py - create_trading_agent)
   - Import: `from langchain.agents import create_agent`
   - Tools list: [solana_trade, get_wallet_balance]
   - System prompt:
@@ -295,7 +295,7 @@
   - Agent creation: `create_agent(model=model_name, tools=tools, system_prompt=prompt)`
   - Test: Verify agent can invoke tools
 
-- [ ] LLM-006 [US2] Implement LLM trading decision method (file: src/solana_trader/services/llm_analyzer.py - get_trading_decision)
+- [X] LLM-006 [US2] Implement LLM trading decision method (file: src/solana_trader/services/llm_analyzer.py - get_trading_decision)
   - Method: `async def get_trading_decision(user_prompt: str, dry_run: bool = True) -> TradingSignal`
   - Invoke agent: `await agent.invoke({"messages": [{"role": "user", "content": user_prompt}]})`
   - Parse tool calls: Extract solana_trade calls from agent response
@@ -306,7 +306,7 @@
 
 ### JSON Schema Validation
 
-- [ ] LLM-007 [US2] Implement LLM signal validator (file: src/solana_trader/services/llm_analyzer.py - validate_signal)
+- [X] LLM-007 [US2] Implement LLM signal validator (file: src/solana_trader/services/llm_analyzer.py - validate_signal)
   - Load schema: Read contracts/llm-signals.schema.json
   - Function: `def validate_signal_json(signal_dict: dict) -> bool`
   - Validate: Use jsonschema.validate
@@ -315,7 +315,7 @@
 
 ### Storage
 
-- [ ] LLM-008 [US2] Implement trading signal persistence (file: src/solana_trader/services/storage.py - save_trading_signal)
+- [X] LLM-008 [US2] Implement trading signal persistence (file: src/solana_trader/services/storage.py - save_trading_signal)
   - Function: `async def save_trading_signal(signal: TradingSignal) -> int`
   - Insert into trading_signals table with JSON market_conditions
   - Return: Row ID of inserted record
@@ -323,7 +323,7 @@
 
 ### LLM Trading CLI (for testing)
 
-- [ ] LLM-009 [US2] Create LLM trading CLI script (file: src/solana_trader/scripts/llm_trade.py)
+- [X] LLM-009 [US2] Create LLM trading CLI script (file: src/solana_trader/scripts/llm_trade.py)
   - CLI args: `--prompt "Your trading instruction" [--dry-run]`
   - Load config from .env
   - Initialize LLMAnalyzer
