@@ -5,11 +5,16 @@ interact with Solana blockchain and execute trading operations.
 """
 
 from .execute_trade import set_trade_executor, solana_trade
+from .market_data import fetch_karma_indicators, fetch_price, get_market_data, set_data_collector
 from .wallet_info import get_wallet_balance, set_wallet_manager
 
 __all__ = [
     "solana_trade",
     "get_wallet_balance",
+    "fetch_price",
+    "get_market_data",
+    "fetch_karma_indicators",
     "set_trade_executor",
     "set_wallet_manager",
+    "set_data_collector",
 ]

@@ -16,10 +16,20 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
 from ..config import BotConfiguration
-from ..langchain_tools import get_wallet_balance, set_trade_executor, set_wallet_manager, solana_trade
+from ..langchain_tools import (
+    fetch_karma_indicators,
+    fetch_price,
+    get_market_data,
+    get_wallet_balance,
+    set_data_collector,
+    set_trade_executor,
+    set_wallet_manager,
+    solana_trade,
+)
 from ..models.trading_signal import MarketConditions, TradingSignal
 from ..utils.logger import get_logger
 from ..wallet.manager import WalletManager
+from .data_collector import DataCollector
 from .storage import StorageService
 from .trade_executor import TradeExecutor
 
@@ -40,26 +50,38 @@ CRITICAL SAFETY RULES:
 1. ALWAYS use dry_run=True for the first call to test any trade
 2. NEVER trade more than 0.1 SOL at once without explicit user confirmation
 3. ALWAYS check wallet balance before trading using get_wallet_balance tool
-4. ALWAYS provide clear rationale for every trade decision
-5. If a dry-run succeeds, ask user for confirmation before executing real trade
+4. ALWAYS fetch market data before making trading decisions
+5. ALWAYS provide clear rationale for every trade decision
+6. If a dry-run succeeds, ask user for confirmation before executing real trade
 
 Available tools:
 - get_wallet_balance: Check current SOL and USDT balances
 - solana_trade: Execute BUY or SELL trade on Jupiter DEX (use dry_run=True first!)
+- fetch_price: Get current SOL/USD price from Jupiter or CoinGecko
+- get_market_data: Get comprehensive market data (price, volume, sentiment, liquidity)
+- fetch_karma_indicators: Get CoinKarma sentiment and liquidity indicators
 
 Trading Process:
-1. Check wallet balance first using get_wallet_balance
-2. Analyze the request and market conditions
-3. Make a test call with dry_run=True to verify quote
-4. If dry_run succeeds, provide clear reasoning
-5. Only execute real trade if explicitly confirmed or instructed
+1. Fetch current market data using get_market_data tool
+2. Check wallet balance using get_wallet_balance
+3. Analyze market conditions (price trends, volume, sentiment, liquidity)
+4. Make informed trading decision based on data
+5. Test trade with dry_run=True to verify quote
+6. If dry_run succeeds, provide clear reasoning
+7. Only execute real trade if explicitly confirmed or instructed
+
+Market Data Interpretation:
+- Pulse Index (0-100): Higher values = stronger bullish sentiment
+- Liquidity Index (0-100): Higher values = better market depth, lower slippage
+- Volume 24h: Higher volume = more market activity
+- Price Change 24h: Indicates current trend direction
 
 Response Format:
 Always provide your analysis in this JSON structure:
 {{
   "signal": "BUY" | "SELL" | "HOLD",
   "confidence": 0.0 to 1.0,
-  "rationale": "Clear explanation (minimum 50 words)",
+  "rationale": "Clear explanation (minimum 50 words) including market data analysis",
   "suggested_amount_sol": 0.01,
   "market_conditions": {{
     "trend": "bullish" | "bearish" | "neutral" | "unknown",
@@ -69,7 +91,7 @@ Always provide your analysis in this JSON structure:
   }}
 }}
 
-Remember: You control REAL MONEY. Be cautious, test first, and provide clear reasoning."""
+Remember: You control REAL MONEY. Be cautious, test first, and provide clear reasoning based on actual market data."""
 
 
 class LLMAnalyzer:
@@ -95,9 +117,13 @@ class LLMAnalyzer:
         self.trade_executor = trade_executor
         self.storage = storage
 
+        # Initialize data collector for market data
+        self.data_collector = DataCollector(config)
+
         # Set global tool dependencies
         set_wallet_manager(wallet_manager)
         set_trade_executor(trade_executor)
+        set_data_collector(self.data_collector)
 
         # Initialize OpenRouter client (OpenAI-compatible API)
         self.client = ChatOpenAI(
@@ -132,8 +158,14 @@ class LLMAnalyzer:
         Returns:
             Configured AgentExecutor
         """
-        # Define tools
-        tools = [get_wallet_balance, solana_trade]
+        # Define tools (include market data tools for informed decision-making)
+        tools = [
+            get_wallet_balance,
+            solana_trade,
+            fetch_price,
+            get_market_data,
+            fetch_karma_indicators,
+        ]
 
         # Create prompt template
         prompt = ChatPromptTemplate.from_messages([

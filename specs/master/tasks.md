@@ -368,7 +368,7 @@
 
 ### Data Models
 
-- [ ] DATA-001 [P] [US1] Implement MarketData Pydantic model (file: src/solana_trader/models/market_data.py)
+- [X] DATA-001 [P] [US1] Implement MarketData Pydantic model (file: src/solana_trader/models/market_data.py)
   - Fields: timestamp, source, sol_price_usd, volume_24h, price_change_24h_pct
   - Fields: quote_amount, pulse_index, liquidity_index, liquidity_value, metadata
   - Validation: price > 0, source in ["jupiter", "coingecko", "coinkarma"]
@@ -377,27 +377,27 @@
 
 ### Data Collection Services
 
-- [ ] DATA-002 [P] [US1] Implement Jupiter price fetcher (file: src/solana_trader/services/data_collector.py - fetch_price_from_jupiter)
+- [X] DATA-002 [P] [US1] Implement Jupiter price fetcher (file: src/solana_trader/services/data_collector.py - fetch_price_from_jupiter)
   - Async function: `async def fetch_price_from_jupiter() -> float`
   - Reuse: TRADE-004 quote endpoint
   - Parse: outAmount / 1_000_000 (USDT has 6 decimals)
   - Apply @retry decorator with max 3 attempts
   - Test: Mock aiohttp response, verify price calculation
 
-- [ ] DATA-003 [P] [US1] Implement CoinGecko price fetcher (file: src/solana_trader/services/data_collector.py - fetch_price_from_coingecko)
+- [X] DATA-003 [P] [US1] Implement CoinGecko price fetcher (file: src/solana_trader/services/data_collector.py - fetch_price_from_coingecko)
   - Async function: `async def fetch_price_from_coingecko() -> float`
   - Query: GET `https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd`
   - Parse: data["solana"]["usd"]
   - Apply @retry decorator
   - Test: Mock requests response, verify parsing
 
-- [ ] DATA-004 [US1] Implement CoinKarma integration (file: src/solana_trader/coinkarma/)
+- [X] DATA-004 [US1] Implement CoinKarma integration (file: src/solana_trader/coinkarma/)
   - Copy from agentipy: karmafetch.py, dateutil.py, descrypt.py
   - Adapt: Use BotConfiguration for token and device_id
   - Functions: `fetch_pulse_index()`, `fetch_liquidity_index()`
   - Test: Mock CoinKarma API responses, verify AES decryption
 
-- [ ] DATA-005 [US1] Implement unified data collector service (file: src/solana_trader/services/data_collector.py - DataCollector class)
+- [X] DATA-005 [US1] Implement unified data collector service (file: src/solana_trader/services/data_collector.py - DataCollector class)
   - Method: `async def collect_market_data() -> MarketData`
   - Priority: Try Jupiter first, fallback to CoinGecko on error
   - Enrich: Add CoinKarma pulse_index and liquidity_index
@@ -407,7 +407,7 @@
 
 ### Storage
 
-- [ ] DATA-006 [US1] Implement market data persistence (file: src/solana_trader/services/storage.py - save_market_data)
+- [X] DATA-006 [US1] Implement market data persistence (file: src/solana_trader/services/storage.py - save_market_data)
   - Function: `async def save_market_data(data: MarketData) -> int`
   - Insert into market_data table with JSON metadata
   - Return: Row ID of inserted record
@@ -415,25 +415,25 @@
 
 ### LangChain Tools for Market Data
 
-- [ ] DATA-007 [US1] Implement fetch_price tool (file: src/solana_trader/langchain_tools/fetch_price.py)
+- [X] DATA-007 [US1] Implement fetch_price tool (file: src/solana_trader/langchain_tools/market_data.py - fetch_price)
   - Decorator: `@tool`
-  - Function: `async def solana_fetch_price(token_address: str) -> str`
+  - Function: `async def fetch_price() -> str`
   - Docstring: "Fetch current token price from Jupiter or CoinGecko..."
   - Return: JSON string with status, price_usd, volume_24h, timestamp
   - Error handling: Return error JSON on exception
   - Test: Unit test with mocked data_collector
 
-- [ ] DATA-008 [US1] Implement get_market_data tool (file: src/solana_trader/langchain_tools/get_market_data.py)
+- [X] DATA-008 [US1] Implement get_market_data tool (file: src/solana_trader/langchain_tools/market_data.py - get_market_data)
   - Decorator: `@tool`
-  - Function: `async def solana_get_market_data() -> str`
+  - Function: `async def get_market_data() -> str`
   - Docstring: "Get comprehensive market data including price, volume, sentiment..."
   - Query: Latest MarketData from storage
   - Return: JSON string with all market indicators
   - Test: Unit test with mocked storage query
 
-- [ ] DATA-009 [US1] Implement fetch_karma_indicators tool (file: src/solana_trader/langchain_tools/fetch_karma_indicators.py)
+- [X] DATA-009 [US1] Implement fetch_karma_indicators tool (file: src/solana_trader/langchain_tools/market_data.py - fetch_karma_indicators)
   - Decorator: `@tool`
-  - Function: `async def fetch_coinkarma_indicators() -> str`
+  - Function: `async def fetch_karma_indicators() -> str`
   - Docstring: "Fetch CoinKarma Pulse Index (sentiment) and Liquidity Index..."
   - Call: coinkarma.karmafetch functions
   - Return: JSON string with pulse_index, liquidity_index, liquidity_value
@@ -448,7 +448,7 @@
   - Logging: Log latency for each fetch (<5s target)
   - Test: Unit test with mocked DataCollector
 
-- [ ] DATA-011 [US1] Integrate market data into LLM analysis (file: src/solana_trader/services/llm_analyzer.py)
+- [X] DATA-011 [US1] Integrate market data into LLM analysis (file: src/solana_trader/services/llm_analyzer.py)
   - Update: create_trading_agent to include market data tools
   - Update: System prompt to include market analysis instructions
   - Update: get_trading_decision to fetch and pass market data
